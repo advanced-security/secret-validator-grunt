@@ -33,7 +33,7 @@ class SkillInfo(BaseModel):
 	description: str = Field(default="", description="Skill description")
 	path: str = Field(description="Absolute path to SKILL.md")
 	phase: str | None = Field(default=None,
-	                             description="Phase this skill belongs to")
+	                          description="Phase this skill belongs to")
 	secret_type: str | None = Field(
 	    default=None, description="Secret type this skill applies to")
 	required: bool = Field(default=False,

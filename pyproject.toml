@@ -11,7 +11,7 @@ dependencies = [
     "pyyaml>=6",
     "rich>=14",
     "typer>=0.21",
-    "github-copilot-sdk>=0.1.21",
+    "github-copilot-sdk>=0.1.23",
     "ghapi>=1.0.10",
     "validate-secrets @ git+https://github.com/advanced-security/validate-secrets.git@0a813752d37c0117b067c48ca3267d4f47518998",
 ]

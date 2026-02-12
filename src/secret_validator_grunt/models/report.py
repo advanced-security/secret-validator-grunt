@@ -25,8 +25,7 @@ class ReportScore(BaseModel):
 
 	factor: str = Field(description="Scoring factor")
 	score: float = Field(description="Score value")
-	rationale: str | None = Field(default=None,
-	                                 description="Score rationale")
+	rationale: str | None = Field(default=None, description="Score rationale")
 
 
 class Report(BaseModel):

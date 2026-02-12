@@ -72,7 +72,8 @@ def test_tui_render_skill_usage_table():
 	table = ui._render_skill_usage_table(results)
 
 	# The table should have the correct structure
-	assert len(table.columns) == 5  # Run, Skills Loaded, By Phase, Required, Compliance
+	assert len(table.columns
+	           ) == 5  # Run, Skills Loaded, By Phase, Required, Compliance
 
 
 def test_tui_render_skill_usage_table_no_data():
@@ -101,7 +102,11 @@ def test_tui_render_skill_usage_with_phases():
 	    available_skills=["a", "b", "c"],
 	    required_skills=["a"],
 	    loaded_skills=["a", "b"],
-	    phase_map={"a": "1-init", "b": "1-init", "c": "2-ctx"},
+	    phase_map={
+	        "a": "1-init",
+	        "b": "1-init",
+	        "c": "2-ctx"
+	    },
 	)
 	stats.add_load_event("a", SkillLoadStatus.LOADED, phase="1-init")
 	stats.add_load_event("b", SkillLoadStatus.LOADED, phase="1-init")
@@ -135,7 +140,8 @@ def test_tui_render_tool_usage_table():
 	]
 
 	table = ui._render_tool_usage_table(results)
-	assert len(table.columns) == 6  # Run, Total, Success, Failed, Rate, Top Tools
+	assert len(
+	    table.columns) == 6  # Run, Total, Success, Failed, Rate, Top Tools
 
 
 def test_tui_render_tool_usage_table_no_data():

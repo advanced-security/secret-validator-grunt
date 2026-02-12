@@ -95,13 +95,13 @@ def test_apply_overrides_all_fields():
 
 	cfg = Config()
 	rp = RunParams(
-		org_repo="o/r",
-		alert_id="1",
-		analyses=7,
-		timeout=999,
-		judge_timeout=42,
-		stream_verbose=True,
-		show_usage=True,
+	    org_repo="o/r",
+	    alert_id="1",
+	    analyses=7,
+	    timeout=999,
+	    judge_timeout=42,
+	    stream_verbose=True,
+	    show_usage=True,
 	)
 	cfg.apply_overrides(rp)
 	assert cfg.analysis_count == 7

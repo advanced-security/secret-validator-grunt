@@ -24,7 +24,7 @@ class UsageStats(BaseModel):
 	current_tokens: float | None = Field(
 	    default=None, description="Current tokens in session context")
 	token_limit: float | None = Field(default=None,
-	                                     description="Session token limit")
+	                                  description="Session token limit")
 	quota_snapshots_start: dict[str, QuotaSnapshot] | None = Field(
 	    default=None, description="Initial quota snapshots")
 	quota_snapshots_end: dict[str, QuotaSnapshot] | None = Field(
@@ -61,8 +61,7 @@ class UsageStats(BaseModel):
 		self.duration += duration or 0
 
 	def update_snapshot(
-	        self, *, current_tokens: float | None,
-	        token_limit: float | None,
+	        self, *, current_tokens: float | None, token_limit: float | None,
 	        quota_snapshots: dict[str, QuotaSnapshot] | None) -> None:
 		"""Update snapshot state and preserve first/last quota snapshots."""
 		if current_tokens is not None:

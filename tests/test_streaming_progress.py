@@ -197,10 +197,10 @@ async def test_skill_tracking_basic(tmp_path):
 	# Create a manifest with some skills
 	manifest = SkillManifest(
 	    skills=[
-	        SkillInfo(name="skill-a", description="A",
-	                  path="/a", phase="1-init", required=True),
-	        SkillInfo(name="skill-b", description="B",
-	                  path="/b", phase="2-gather", required=False),
+	        SkillInfo(name="skill-a", description="A", path="/a",
+	                  phase="1-init", required=True),
+	        SkillInfo(name="skill-b", description="B", path="/b",
+	                  phase="2-gather", required=False),
 	    ],
 	    phases=["1-init", "2-gather"],
 	)
@@ -220,17 +220,13 @@ async def test_skill_tracking_basic(tmp_path):
 
 	# Simulate skill tool execution start (has tool_call_id, tool_name, arguments)
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_START,
-	       tool_call_id="call-001",
-	       tool_name="skill",
-	       arguments={"skill": "skill-a"}))
+	    ev(SessionEventType.TOOL_EXECUTION_START, tool_call_id="call-001",
+	       tool_name="skill", arguments={"skill": "skill-a"}))
 
 	# Simulate skill tool execution complete (only has tool_call_id, success, error - NO tool_name/arguments)
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE,
-	       tool_call_id="call-001",
-	       success=True,
-	       error=None))
+	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE, tool_call_id="call-001",
+	       success=True, error=None))
 
 	# Verify skill was tracked
 	stats = collector.skill_usage
@@ -261,16 +257,12 @@ async def test_skill_tracking_failed_load(tmp_path):
 
 	# Simulate failed skill load (not 'not found', but a generic failure)
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_START,
-	       tool_call_id="call-002",
-	       tool_name="skill",
-	       arguments={"skill": "broken-skill"}))
+	    ev(SessionEventType.TOOL_EXECUTION_START, tool_call_id="call-002",
+	       tool_name="skill", arguments={"skill": "broken-skill"}))
 
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE,
-	       tool_call_id="call-002",
-	       success=False,
-	       error="Connection timeout"))
+	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE, tool_call_id="call-002",
+	       success=False, error="Connection timeout"))
 
 	stats = collector.skill_usage
 	assert "broken-skill" not in stats.loaded_skills
@@ -298,16 +290,12 @@ async def test_skill_tracking_not_found(tmp_path):
 
 	# Simulate skill not found
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_START,
-	       tool_call_id="call-003",
-	       tool_name="skill",
-	       arguments={"skill": "nonexistent"}))
+	    ev(SessionEventType.TOOL_EXECUTION_START, tool_call_id="call-003",
+	       tool_name="skill", arguments={"skill": "nonexistent"}))
 
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE,
-	       tool_call_id="call-003",
-	       success=False,
-	       error="Skill not found"))
+	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE, tool_call_id="call-003",
+	       success=False, error="Skill not found"))
 
 	stats = collector.skill_usage
 	assert "nonexistent" not in stats.loaded_skills
@@ -325,10 +313,10 @@ async def test_skill_tracking_finalize(tmp_path):
 
 	manifest = SkillManifest(
 	    skills=[
-	        SkillInfo(name="required-a", description="A",
-	                  path="/a", required=True),
-	        SkillInfo(name="required-b", description="B",
-	                  path="/b", required=True),
+	        SkillInfo(name="required-a", description="A", path="/a",
+	                  required=True),
+	        SkillInfo(name="required-b", description="B", path="/b",
+	                  required=True),
 	    ],
 	    phases=[],
 	)
@@ -347,13 +335,10 @@ async def test_skill_tracking_finalize(tmp_path):
 
 	# Only load one of two required skills
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_START,
-	       tool_call_id="call-004",
-	       tool_name="skill",
-	       arguments={"skill": "required-a"}))
+	    ev(SessionEventType.TOOL_EXECUTION_START, tool_call_id="call-004",
+	       tool_name="skill", arguments={"skill": "required-a"}))
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE,
-	       tool_call_id="call-004",
+	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE, tool_call_id="call-004",
 	       success=True))
 
 	stats = collector.finalize_skill_usage()
@@ -381,18 +366,15 @@ async def test_skill_tracking_duration(tmp_path):
 
 	# Start event
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_START,
-	       tool_call_id="call-005",
-	       tool_name="skill",
-	       arguments={"skill": "test-skill"}))
+	    ev(SessionEventType.TOOL_EXECUTION_START, tool_call_id="call-005",
+	       tool_name="skill", arguments={"skill": "test-skill"}))
 
 	# Small delay to ensure measurable duration
 	time.sleep(0.01)
 
 	# Complete event
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE,
-	       tool_call_id="call-005",
+	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE, tool_call_id="call-005",
 	       success=True))
 
 	stats = collector.skill_usage
@@ -447,27 +429,19 @@ async def test_tool_tracking_records_all_tools(tmp_path):
 
 	# Simulate bash tool call
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_START,
-	       tool_call_id="c1",
+	    ev(SessionEventType.TOOL_EXECUTION_START, tool_call_id="c1",
 	       tool_name="bash"))
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE,
-	       tool_call_id="c1",
-	       tool_name="bash",
-	       success=True,
-	       error=None))
+	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE, tool_call_id="c1",
+	       tool_name="bash", success=True, error=None))
 
 	# Simulate view tool call
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_START,
-	       tool_call_id="c2",
+	    ev(SessionEventType.TOOL_EXECUTION_START, tool_call_id="c2",
 	       tool_name="view"))
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE,
-	       tool_call_id="c2",
-	       tool_name="view",
-	       success=True,
-	       error=None))
+	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE, tool_call_id="c2",
+	       tool_name="view", success=True, error=None))
 
 	stats = collector.tool_usage
 	assert stats.total_calls == 2
@@ -497,15 +471,11 @@ async def test_tool_tracking_records_failures(tmp_path):
 		})
 
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_START,
-	       tool_call_id="c1",
+	    ev(SessionEventType.TOOL_EXECUTION_START, tool_call_id="c1",
 	       tool_name="bash"))
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE,
-	       tool_call_id="c1",
-	       tool_name="bash",
-	       success=False,
-	       error="Command failed"))
+	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE, tool_call_id="c1",
+	       tool_name="bash", success=False, error="Command failed"))
 
 	stats = collector.tool_usage
 	assert stats.total_calls == 1
@@ -532,15 +502,11 @@ async def test_tool_tracking_not_recorded_without_show_usage(tmp_path):
 		})
 
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_START,
-	       tool_call_id="c1",
+	    ev(SessionEventType.TOOL_EXECUTION_START, tool_call_id="c1",
 	       tool_name="bash"))
 	collector.handler(
-	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE,
-	       tool_call_id="c1",
-	       tool_name="bash",
-	       success=True,
-	       error=None))
+	    ev(SessionEventType.TOOL_EXECUTION_COMPLETE, tool_call_id="c1",
+	       tool_name="bash", success=True, error=None))
 
 	assert collector.tool_usage is None
 
@@ -553,10 +519,10 @@ async def test_tool_tracking_phase_map_populated(tmp_path):
 
 	manifest = SkillManifest(
 	    skills=[
-	        SkillInfo(name="skill-a", description="A",
-	                  path="/a", phase="1-init", required=True),
-	        SkillInfo(name="skill-b", description="B",
-	                  path="/b", phase="2-gather", required=False),
+	        SkillInfo(name="skill-a", description="A", path="/a",
+	                  phase="1-init", required=True),
+	        SkillInfo(name="skill-b", description="B", path="/b",
+	                  phase="2-gather", required=False),
 	    ],
 	    phases=["1-init", "2-gather"],
 	)

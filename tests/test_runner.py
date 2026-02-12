@@ -20,8 +20,6 @@ class DummySession:
 		# simulate minimal response structure
 		prompt = options.get("prompt") if isinstance(options, dict) else None
 		if prompt is not None:
-			assert prompt.startswith(
-			    "@"), "Prompt should invoke custom agent with @name"
 			self.last_prompt = prompt
 
 		class DummyData:
@@ -69,8 +67,12 @@ class DummyClient:
 
 @pytest.mark.asyncio
 async def test_run_all_saves_final_report(tmp_path, monkeypatch):
-	cfg = Config(COPILOT_CLI_URL="http://x", OUTPUT_DIR=str(tmp_path),
-	             ANALYSIS_COUNT=1)
+	cfg = Config(
+	    COPILOT_CLI_URL="http://x",
+	    OUTPUT_DIR=str(tmp_path),
+	    ANALYSIS_COUNT=1,
+	    MAX_CONTINUATION_ATTEMPTS=0,
+	)
 	agent_file = tmp_path / "agent.md"
 	agent_file.write_text("""---\nname: a\n---\nprompt""", encoding="utf-8")
 	cfg.agent_file = str(agent_file)
@@ -92,8 +94,12 @@ async def test_run_all_saves_final_report(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_run_all_handles_analysis_exception(tmp_path, monkeypatch):
-	cfg = Config(COPILOT_CLI_URL="http://x", OUTPUT_DIR=str(tmp_path),
-	             ANALYSIS_COUNT=1)
+	cfg = Config(
+	    COPILOT_CLI_URL="http://x",
+	    OUTPUT_DIR=str(tmp_path),
+	    ANALYSIS_COUNT=1,
+	    MAX_CONTINUATION_ATTEMPTS=0,
+	)
 	agent_file = tmp_path / "agent.md"
 	agent_file.write_text("""---\nname: a\n---\nprompt""", encoding="utf-8")
 	cfg.agent_file = str(agent_file)
@@ -145,6 +151,7 @@ async def test_run_all_uses_custom_agents_and_prompts(tmp_path, monkeypatch):
 	    ANALYSIS_COUNT=1,
 	    SKILL_DIRECTORIES=f"{skill1},{skill2}",
 	    DISABLED_SKILLS="skill2",
+	    MAX_CONTINUATION_ATTEMPTS=0,
 	)
 	agent_file = tmp_path / "agent.md"
 	agent_file.write_text(

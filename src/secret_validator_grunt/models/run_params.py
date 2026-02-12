@@ -26,16 +26,14 @@ class RunParams(BaseModel):
 
 	org_repo: str = Field(description="owner/repo")
 	alert_id: str = Field(description="Secret scanning alert id")
-	analyses: int | None = Field(default=None,
-	                                description="Override analyses")
-	timeout: int | None = Field(default=None,
-	                               description="Analysis timeout")
+	analyses: int | None = Field(default=None, description="Override analyses")
+	timeout: int | None = Field(default=None, description="Analysis timeout")
 	judge_timeout: int | None = Field(default=None,
-	                                     description="Judge timeout")
+	                                  description="Judge timeout")
 	stream_verbose: bool | None = Field(default=None,
-	                                       description="Stream deltas")
+	                                    description="Stream deltas")
 	show_usage: bool | None = Field(default=None,
-	                                   description="Show usage metrics")
+	                                description="Show usage metrics")
 
 	@field_validator('org_repo')
 	@classmethod

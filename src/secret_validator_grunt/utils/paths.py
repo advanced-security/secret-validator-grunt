@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 # Root of the secret_validator_grunt package directory.
 PACKAGE_DIR: Path = Path(__file__).resolve().parent.parent
 

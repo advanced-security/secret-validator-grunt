@@ -15,15 +15,15 @@ from secret_validator_grunt.models.config import Config
 from secret_validator_grunt.models.run_params import RunParams
 from secret_validator_grunt.loaders.templates import load_report_template
 from secret_validator_grunt.ui.streaming import (
-	StreamCollector,
-	ProgressCallback,
-	fetch_last_assistant_message,
+    StreamCollector,
+    ProgressCallback,
+    fetch_last_assistant_message,
 )
 from secret_validator_grunt.integrations.copilot_tools import get_session_tools
 from secret_validator_grunt.core.skills import (
-	discover_skill_directories,
-	discover_hidden_skills,
-	DEFAULT_SKILLS_DIRECTORY,
+    discover_skill_directories,
+    discover_hidden_skills,
+    DEFAULT_SKILLS_DIRECTORY,
 )
 from secret_validator_grunt.utils.logging import get_logger
 
@@ -31,9 +31,9 @@ logger = get_logger(__name__)
 
 
 def resolve_run_params(
-	run_params: RunParams | None,
-	org_repo: str | None,
-	alert_id: str | None,
+    run_params: RunParams | None,
+    org_repo: str | None,
+    alert_id: str | None,
 ) -> RunParams:
 	"""Resolve RunParams from explicit params or org_repo/alert_id fallback.
 
@@ -87,19 +87,28 @@ def discover_all_disabled_skills(config: Config) -> list[str]:
 
 
 async def send_and_collect(
-	session: object,
-	prompt: str,
-	timeout: int,
-	collector: StreamCollector,
-	run_id: str,
-	progress_cb: ProgressCallback | None = None,
-	*,
-	reraise: bool = True,
+    session: object,
+    prompt: str,
+    timeout: int,
+    collector: StreamCollector,
+    run_id: str,
+    progress_cb: ProgressCallback | None = None,
+    *,
+    reraise: bool = True,
+    continuation_prompt: str | None = None,
+    max_continuations: int = 0,
+    min_response_length: int = 500,
 ) -> str | None:
-	"""Send a prompt and collect the response with timeout handling.
+	"""Send a prompt and collect the response.
 
-	Handles timeout (attempts abort), optional error re-raising, and
-	falls back to collector text or last assistant message.
+	When continuation_prompt is set, checks whether the
+	response is shorter than min_response_length chars.
+	If so, sends the continuation prompt in the same
+	session (retaining all prior context) up to
+	max_continuations times. This mitigates the
+	non-deterministic early-termination pattern where
+	the model emits an empty assistant.message with no
+	tool requests, causing session.idle.
 
 	Parameters:
 		session: Active Copilot session.
@@ -108,16 +117,117 @@ async def send_and_collect(
 		collector: Stream collector for events.
 		run_id: Run identifier for progress callbacks.
 		progress_cb: Optional progress callback.
-		reraise: If True, re-raise non-timeout exceptions.
-			If False, append error to raw text (judge behavior).
+		reraise: If True, re-raise non-timeout errors.
+			If False, append error to raw text.
+		continuation_prompt: Prompt to send on early
+			termination. None disables continuation.
+		max_continuations: Max continuation attempts.
+		min_response_length: Minimum char count for a
+			valid response.
+
+	Returns:
+		Raw response text, or empty string on failure.
+	"""
+	raw = await _send_once(
+	    session,
+	    prompt,
+	    timeout,
+	    collector,
+	    run_id,
+	    progress_cb,
+	    reraise=reraise,
+	)
+
+	# --- continuation loop ---
+	if continuation_prompt and max_continuations > 0:
+		attempts = 0
+		while attempts < max_continuations and _is_empty(
+		    raw,
+		    min_response_length,
+		):
+			attempts += 1
+			msg = (f"empty_response_continuation "
+			       f"attempt={attempts}/{max_continuations}")
+			logger.warning(
+			    "analysis %s: %s (len=%d, min=%d)",
+			    run_id,
+			    msg,
+			    len(raw or ""),
+			    min_response_length,
+			)
+			if progress_cb:
+				progress_cb(run_id, msg)
+
+			raw = await _send_once(
+			    session,
+			    continuation_prompt,
+			    timeout,
+			    collector,
+			    run_id,
+			    progress_cb,
+			    reraise=reraise,
+			)
+
+		if _is_empty(raw, min_response_length):
+			logger.error(
+			    "analysis %s: still empty after %d continuations",
+			    run_id,
+			    attempts,
+			)
+			if progress_cb:
+				progress_cb(
+				    run_id,
+				    f"empty_after_{attempts}_continuations",
+				)
+
+	return raw
+
+
+def _is_empty(raw: str | None, min_length: int) -> bool:
+	"""Return True when the response is too short.
+
+	Parameters:
+		raw: Response text.
+		min_length: Minimum acceptable length.
+
+	Returns:
+		True if raw is None, empty, or shorter than
+		min_length after stripping whitespace.
+	"""
+	return not raw or len(raw.strip()) < min_length
+
+
+async def _send_once(
+    session: object,
+    prompt: str,
+    timeout: int,
+    collector: StreamCollector,
+    run_id: str,
+    progress_cb: ProgressCallback | None = None,
+    *,
+    reraise: bool = True,
+) -> str | None:
+	"""Send a single prompt and return the raw response.
+
+	Core send logic extracted from send_and_collect so
+	it can be called in a loop for continuations.
+
+	Parameters:
+		session: Active Copilot session.
+		prompt: Prompt to send.
+		timeout: Timeout in seconds.
+		collector: Stream collector for events.
+		run_id: Run identifier for progress callbacks.
+		progress_cb: Optional progress callback.
+		reraise: If True, re-raise non-timeout errors.
 
 	Returns:
 		Raw response text, or empty string on failure.
 	"""
 	raw: str | None = None
 	try:
-		response = await session.send_and_wait(
-			{"prompt": prompt}, timeout=timeout)
+		response = await session.send_and_wait({"prompt": prompt},
+		                                       timeout=timeout)
 		if response and getattr(response, "data", None):
 			raw = response.data.content
 	except asyncio.TimeoutError as te:
@@ -135,8 +245,8 @@ async def send_and_collect(
 		raw = (raw or "") + (f"\nERROR: {exc}" if raw else f"ERROR: {exc}")
 
 	if not raw:
-		raw = collector.text or (
-			await fetch_last_assistant_message(session) or "")
+		raw = collector.text or (await fetch_last_assistant_message(session)
+		                         or "")
 
 	return raw
 
@@ -157,9 +267,10 @@ async def destroy_session_safe(session: object | None, label: str) -> None:
 
 
 __all__ = [
-	"resolve_run_params",
-	"load_and_validate_template",
-	"discover_all_disabled_skills",
-	"send_and_collect",
-	"destroy_session_safe",
+    "resolve_run_params",
+    "load_and_validate_template",
+    "discover_all_disabled_skills",
+    "send_and_collect",
+    "destroy_session_safe",
+    "_is_empty",
 ]

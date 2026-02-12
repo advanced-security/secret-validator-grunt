@@ -303,9 +303,8 @@ class TUI:
 				    "yellow" if rate >= 80 else "red")
 
 				top = tu.top_tools(limit=5)
-				top_str = " ".join(
-				    f"{t.tool_name}({t.total})" for t in top
-				) if top else "-"
+				top_str = " ".join(f"{t.tool_name}({t.total})"
+				                   for t in top) if top else "-"
 
 				table.add_row(
 				    f"run {res.run_id}",
@@ -317,7 +316,12 @@ class TUI:
 				)
 			else:
 				table.add_row(
-				    f"run {res.run_id}", "-", "-", "-", "-", "-",
+				    f"run {res.run_id}",
+				    "-",
+				    "-",
+				    "-",
+				    "-",
+				    "-",
 				)
 
 		return table
@@ -350,13 +354,15 @@ class TUI:
 		self.console.print()
 
 		data = build_summary_data(
-			winner_index, analysis_results, output_dir,
-			judge_result=judge_result, show_usage=self.show_usage,
+		    winner_index,
+		    analysis_results,
+		    output_dir,
+		    judge_result=judge_result,
+		    show_usage=self.show_usage,
 		)
 		self._render_summary(data, analysis_results, judge_result)
 
-	def _render_summary(self, data, analysis_results: list,
-	                    judge_result=None):
+	def _render_summary(self, data, analysis_results: list, judge_result=None):
 		"""Render the summary to console using pre-extracted data.
 
 		Parameters:
@@ -428,14 +434,12 @@ class TUI:
 			if data.has_skill_usage:
 				self.console.print("\n[bold]Skill Usage[/bold]")
 				self.console.print(
-				    self._render_skill_usage_table(analysis_results),
-				)
+				    self._render_skill_usage_table(analysis_results), )
 
 			if data.has_tool_usage:
 				self.console.print("\n[bold]Tool Usage[/bold]")
 				self.console.print(
-				    self._render_tool_usage_table(analysis_results),
-				)
+				    self._render_tool_usage_table(analysis_results), )
 
 
 __all__ = ["TUI", "RunDisplayState"]

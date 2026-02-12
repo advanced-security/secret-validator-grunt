@@ -71,9 +71,8 @@ class StreamCollector:
 		self._skill_usage = self._init_skill_usage()
 
 		# Tool usage tracking (all tools, not just skills)
-		self._tool_usage: ToolUsageStats | None = (
-		    ToolUsageStats() if show_usage else None
-		)
+		self._tool_usage: ToolUsageStats | None = (ToolUsageStats()
+		                                           if show_usage else None)
 
 	def _init_skill_usage(self) -> SkillUsageStats:
 		"""
@@ -83,18 +82,14 @@ class StreamCollector:
 			SkillUsageStats populated with available/required/disabled skills.
 		"""
 		if not self._skill_manifest:
-			return SkillUsageStats(
-			    disabled_skills=list(self._disabled_skills),
-			)
+			return SkillUsageStats(disabled_skills=list(
+			    self._disabled_skills), )
 
 		available = [s.name for s in self._skill_manifest.skills]
-		required = [
-		    s.name for s in self._skill_manifest.skills if s.required
-		]
+		required = [s.name for s in self._skill_manifest.skills if s.required]
 		phase_map = {
 		    s.name: s.phase
-		    for s in self._skill_manifest.skills
-		    if s.phase
+		    for s in self._skill_manifest.skills if s.phase
 		}
 		return SkillUsageStats(
 		    available_skills=available,
@@ -284,7 +279,8 @@ class StreamCollector:
 			if self._tool_usage and tool_call_id:
 				if et == SessionEventType.TOOL_EXECUTION_START:
 					self._tool_usage.add_start(
-					    tool_call_id, tool_name,
+					    tool_call_id,
+					    tool_name,
 					)
 				elif et == SessionEventType.TOOL_EXECUTION_COMPLETE:
 					success = getattr(data, "success", True)
@@ -297,9 +293,8 @@ class StreamCollector:
 
 			# Track skill tool events
 			if tool_name == "skill" or (
-			    et == SessionEventType.TOOL_EXECUTION_COMPLETE and
-			    tool_call_id in self._pending_skill_calls
-			):
+			    et == SessionEventType.TOOL_EXECUTION_COMPLETE
+			    and tool_call_id in self._pending_skill_calls):
 				self._handle_skill_event(et, data)
 			if self.stream_verbose and self.progress_cb:
 				self.progress_cb(self.run_id, f"{et.value}: {tool_name}")

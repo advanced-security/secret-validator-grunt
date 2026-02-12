@@ -48,26 +48,41 @@ logger = get_logger(__name__)
 
 
 def _build_analysis_prompt(
-        base_prompt: str, context_block: str, report_template: str | None,
-        skill_manifest_context: str | None = None) -> str:
-	"""Compose the full prompt for analysis with optional template and skill manifest."""
+    base_prompt: str,
+    context_block: str,
+    report_template: str | None,
+    skill_manifest_context: str | None = None,
+) -> str:
+	"""Compose the full analysis prompt.
+
+	Joins the base prompt, context block, optional skill
+	manifest, and report template into a single string.
+
+	Parameters:
+		base_prompt: Loaded prompt template text.
+		context_block: Repository/alert context string.
+		report_template: Report template markdown, or None.
+		skill_manifest_context: Formatted skill manifest.
+
+	Returns:
+		Combined prompt string.
+	"""
 	parts = [base_prompt, context_block]
 
 	if skill_manifest_context:
 		parts.append(skill_manifest_context)
 
 	if report_template:
-		parts.append(
-		    f"Report template you must use:\n```markdown\n{report_template}\n```"
-		)
+		parts.append(f"Report template you must use:\n"
+		             f"```markdown\n{report_template}\n```")
 
 	return "\n\n".join(parts)
 
 
 def _setup_workspace(
-	config: Config,
-	rp: RunParams,
-	run_uuid: str,
+    config: Config,
+    rp: RunParams,
+    run_uuid: str,
 ) -> tuple[Path, str, str]:
 	"""Create the run workspace and build the context block.
 
@@ -80,28 +95,27 @@ def _setup_workspace(
 		Tuple of (workspace path, context block string, stream log path).
 	"""
 	workspace = ensure_within(
-		config.output_path,
-		config.output_path / rp.org_repo_slug / rp.alert_id_slug / run_uuid,
+	    config.output_path,
+	    config.output_path / rp.org_repo_slug / rp.alert_id_slug / run_uuid,
 	)
 	workspace.mkdir(parents=True, exist_ok=True)
 	stream_log_path = workspace / "stream.log"
 	context_block = (
-		f"## Context\n\n- Repository: {rp.org_repo}\n- Alert ID: {rp.alert_id}\n"
-		f"- Workspace: {workspace} !!! DO EVERYTHING HERE, ALWAYS !!!\n"
-	)
+	    f"## Context\n\n- Repository: {rp.org_repo}\n- Alert ID: {rp.alert_id}\n"
+	    f"- Workspace: {workspace} !!! DO EVERYTHING HERE, ALWAYS !!!\n")
 	return workspace, context_block, stream_log_path
 
 
 def _build_session_config(
-	config: Config,
-	agent: AgentConfig,
-	workspace: Path,
-	skill_dirs: list[str],
-	disabled_skills: list[str],
-	session_tools: list,
-	rp: RunParams,
-	run_id: str,
-	run_uuid: str,
+    config: Config,
+    agent: AgentConfig,
+    workspace: Path,
+    skill_dirs: list[str],
+    disabled_skills: list[str],
+    session_tools: list,
+    rp: RunParams,
+    run_id: str,
+    run_uuid: str,
 ) -> dict:
 	"""Build the session configuration dict for create_session().
 
@@ -121,25 +135,25 @@ def _build_session_config(
 	"""
 	chosen_model = agent.model or config.model
 	return {
-		"model": chosen_model,
-		"streaming": True,
-		"custom_agents": [to_custom_agent(agent)],
-		"tools": session_tools,
-		"available_tools": agent.tools or None,
-		"skill_directories": [
-			str(workspace.resolve()),
-			*skill_dirs,
-		],
-		"disabled_skills": disabled_skills or None,
-		"session_id": f"{rp.session_id_prefix}-{run_id}-{run_uuid}",
+	    "model": chosen_model,
+	    "streaming": True,
+	    "custom_agents": [to_custom_agent(agent)],
+	    "tools": session_tools,
+	    "available_tools": agent.tools or None,
+	    "skill_directories": [
+	        str(workspace.resolve()),
+	        *skill_dirs,
+	    ],
+	    "disabled_skills": disabled_skills or None,
+	    "session_id": f"{rp.session_id_prefix}-{run_id}-{run_uuid}",
 	}
 
 
 def _persist_diagnostics(
-	run_id: str,
-	collector: StreamCollector,
-	skill_usage: object,
-	workspace: Path,
+    run_id: str,
+    collector: StreamCollector,
+    skill_usage: object,
+    workspace: Path,
 ) -> None:
 	"""Write diagnostics JSON to the workspace directory.
 
@@ -150,22 +164,23 @@ def _persist_diagnostics(
 		workspace: Run workspace path.
 	"""
 	diagnostics = {
-		"run_id": str(run_id),
-		"skill_usage": skill_usage.model_dump(),
-		"tool_usage": (
-			collector.tool_usage.model_dump()
-			if collector.tool_usage
-			else None
-		),
-		"usage": collector.usage.model_dump(),
+	    "run_id":
+	    str(run_id),
+	    "skill_usage":
+	    skill_usage.model_dump(),
+	    "tool_usage":
+	    (collector.tool_usage.model_dump() if collector.tool_usage else None),
+	    "usage":
+	    collector.usage.model_dump(),
 	}
 	try:
 		diag_path = workspace / "diagnostics.json"
 		diag_path.write_text(json.dumps(diagnostics, indent=2))
 	except Exception:
 		logger.debug(
-			"failed to write diagnostics.json for run %s",
-			run_id, exc_info=True,
+		    "failed to write diagnostics.json for run %s",
+		    run_id,
+		    exc_info=True,
 		)
 
 
@@ -188,24 +203,32 @@ async def run_analysis(
 	progress = AgentRunProgress(run_id=str(run_id), status=RunStatus.RUNNING)
 	workspace: Path | None = None
 	session = None
-	logger.info("analysis %s start org_repo=%s alert_id=%s", run_id, org_repo,
-	            alert_id)
+	logger.info(
+	    "analysis %s start org_repo=%s alert_id=%s",
+	    run_id,
+	    org_repo,
+	    alert_id,
+	)
 	progress.log("analysis_started")
 	if progress_cb:
 		progress_cb(run_id, "analysis_started")
 
 	try:
 		prompt_template = load_prompt("analysis_task.md")
+		continuation_prompt = load_prompt("continuation_task.md", )
 		rp = resolve_run_params(run_params, org_repo, alert_id)
 
 		run_uuid = uuid.uuid4().hex
 		workspace, context_block, stream_log_path = _setup_workspace(
-			config, rp, run_uuid,
+		    config,
+		    rp,
+		    run_uuid,
 		)
 		if progress_cb:
 			progress_cb(run_id, f"workspace: {workspace}")
 
-		report_template = load_and_validate_template(config.report_template_file)
+		report_template = load_and_validate_template(
+		    config.report_template_file)
 
 		# Build skill directories from phase-based structure + config overrides
 		skill_dirs = discover_skill_directories(config.skill_directories or [])
@@ -215,9 +238,12 @@ async def run_analysis(
 		# Discover hidden skills (underscore-prefixed) to disable at runtime
 		disabled_skills = discover_all_disabled_skills(config)
 
-		prompt = _build_analysis_prompt(prompt_template, context_block,
-		                                report_template,
-		                                skill_manifest_context)
+		prompt = _build_analysis_prompt(
+		    prompt_template,
+		    context_block,
+		    report_template,
+		    skill_manifest_context,
+		)
 		agent_prompt = f"@{agent.name}\n{prompt}"
 		collector = StreamCollector(
 		    run_id=run_id,
@@ -231,15 +257,30 @@ async def run_analysis(
 
 		session_tools = get_session_tools(config, org_repo, alert_id)
 		session_config = _build_session_config(
-			config, agent, workspace, skill_dirs, disabled_skills,
-			session_tools, rp, run_id, run_uuid,
+		    config,
+		    agent,
+		    workspace,
+		    skill_dirs,
+		    disabled_skills,
+		    session_tools,
+		    rp,
+		    run_id,
+		    run_uuid,
 		)
 		session = await client.create_session(session_config)
 		session.on(collector.handler)
 
 		raw = await send_and_collect(
-			session, agent_prompt, config.analysis_timeout_seconds,
-			collector, run_id, progress_cb, reraise=True,
+		    session,
+		    agent_prompt,
+		    config.analysis_timeout_seconds,
+		    collector,
+		    run_id,
+		    progress_cb,
+		    reraise=True,
+		    continuation_prompt=continuation_prompt,
+		    max_continuations=config.max_continuation_attempts,
+		    min_response_length=config.min_response_length,
 		)
 
 		progress.log("analysis_completed")

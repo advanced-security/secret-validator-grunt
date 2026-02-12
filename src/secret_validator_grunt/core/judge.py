@@ -187,8 +187,13 @@ async def run_judge(
 		session.on(collector.handler)
 
 		raw = await send_and_collect(
-		    session, agent_prompt, config.judge_timeout_seconds,
-		    collector, "judge", progress_cb, reraise=False,
+		    session,
+		    agent_prompt,
+		    config.judge_timeout_seconds,
+		    collector,
+		    "judge",
+		    progress_cb,
+		    reraise=False,
 		)
 	finally:
 		await destroy_session_safe(session, "judge")
@@ -206,7 +211,8 @@ async def run_judge(
 				progress_cb("judge", "judge_completed")
 			return jr
 		except Exception:
-			logger.debug("failed to parse JudgeResult from JSON", exc_info=True)
+			logger.debug("failed to parse JudgeResult from JSON",
+			             exc_info=True)
 	# fallback with error
 	logger.warning("judge failed parse org_repo=%s alert_id=%s", org_repo,
 	               alert_id)

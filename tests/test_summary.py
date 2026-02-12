@@ -3,11 +3,11 @@
 from pathlib import Path
 
 from secret_validator_grunt.models.summary import (
-	build_summary_data,
-	SummaryData,
-	WinnerInfo,
-	JudgeInfo,
-	WorkspaceEntry,
+    build_summary_data,
+    SummaryData,
+    WinnerInfo,
+    JudgeInfo,
+    WorkspaceEntry,
 )
 from secret_validator_grunt.models.run_result import AgentRunResult
 from secret_validator_grunt.models.report import Report
@@ -24,18 +24,19 @@ def _make_result(run_id: str, verdict: str | None = None,
 	report = None
 	if verdict:
 		report = Report(
-			raw_markdown="test",
-			verdict=verdict,
-			confidence_score=confidence_score,
-			confidence_label="High" if confidence_score and confidence_score >= 7 else None,
+		    raw_markdown="test",
+		    verdict=verdict,
+		    confidence_score=confidence_score,
+		    confidence_label="High"
+		    if confidence_score and confidence_score >= 7 else None,
 		)
 	return AgentRunResult(
-		run_id=run_id,
-		progress_log=[],
-		workspace=workspace,
-		report=report,
-		skill_usage=skill_usage,
-		tool_usage=tool_usage,
+	    run_id=run_id,
+	    progress_log=[],
+	    workspace=workspace,
+	    report=report,
+	    skill_usage=skill_usage,
+	    tool_usage=tool_usage,
 	)
 
 
@@ -51,8 +52,8 @@ class _FakeJudge:
 def test_build_summary_data_with_winner():
 	"""Extracts winner info from analysis results."""
 	results = [
-		_make_result("0", verdict="FALSE_POSITIVE", workspace="/tmp/ws0",
-		             confidence_score=8.5),
+	    _make_result("0", verdict="FALSE_POSITIVE", workspace="/tmp/ws0",
+	                 confidence_score=8.5),
 	]
 	data = build_summary_data(0, results, Path("/out"))
 	assert data.winner is not None
@@ -79,7 +80,8 @@ def test_build_summary_data_negative_winner_index():
 def test_build_summary_data_with_judge():
 	"""Extracts judge info when judge_result is provided."""
 	results = [_make_result("0")]
-	judge = _FakeJudge(rationale="Best analysis", verdict="VALID", workspace="/tmp/judge")
+	judge = _FakeJudge(rationale="Best analysis", verdict="VALID",
+	                   workspace="/tmp/judge")
 	data = build_summary_data(0, results, Path("/out"), judge_result=judge)
 	assert data.judge is not None
 	assert data.judge.winner_index == 0
@@ -98,9 +100,9 @@ def test_build_summary_data_no_judge():
 def test_build_summary_data_workspaces():
 	"""Collects all workspaces from results and judge."""
 	results = [
-		_make_result("0", workspace="/tmp/ws0"),
-		_make_result("1", workspace="/tmp/ws1"),
-		_make_result("2"),  # no workspace
+	    _make_result("0", workspace="/tmp/ws0"),
+	    _make_result("1", workspace="/tmp/ws1"),
+	    _make_result("2"),  # no workspace
 	]
 	judge = _FakeJudge(workspace="/tmp/judge")
 	data = build_summary_data(0, results, Path("/out"), judge_result=judge)
@@ -113,11 +115,12 @@ def test_build_summary_data_workspaces():
 def test_build_summary_data_usage_flags():
 	"""Usage flags are set only when show_usage=True."""
 	results = [
-		_make_result(
-			"0",
-			skill_usage=SkillUsageStats(available_skills=["a"], loaded_skills=["a"]),
-			tool_usage=ToolUsageStats(),
-		),
+	    _make_result(
+	        "0",
+	        skill_usage=SkillUsageStats(available_skills=["a"],
+	                                    loaded_skills=["a"]),
+	        tool_usage=ToolUsageStats(),
+	    ),
 	]
 	# show_usage=False — flags remain False
 	data_off = build_summary_data(0, results, Path("/out"), show_usage=False)

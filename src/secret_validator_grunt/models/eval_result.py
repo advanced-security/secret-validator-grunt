@@ -17,12 +17,12 @@ class EvalCheck(BaseModel):
 	name: str = Field(description="Check function name")
 	passed: bool = Field(description="Whether the check passed")
 	message: str | None = Field(
-		default=None,
-		description="Human-readable explanation of the result",
+	    default=None,
+	    description="Human-readable explanation of the result",
 	)
 	severity: Literal["error", "warning", "info"] = Field(
-		default="error",
-		description="Severity level: error, warning, or info",
+	    default="error",
+	    description="Severity level: error, warning, or info",
 	)
 
 
@@ -30,19 +30,16 @@ class EvalResult(BaseModel):
 	"""Aggregate result of all eval checks on a report."""
 
 	report_id: str = Field(
-		description="Identifier for the report being evaluated",
-	)
+	    description="Identifier for the report being evaluated", )
 	checks: list[EvalCheck] = Field(
-		default_factory=list,
-		description="Individual check results",
+	    default_factory=list,
+	    description="Individual check results",
 	)
 
 	@property
 	def passed(self) -> bool:
 		"""Return True if all error-severity checks passed."""
-		return all(
-			c.passed for c in self.checks if c.severity == "error"
-		)
+		return all(c.passed for c in self.checks if c.severity == "error")
 
 	@property
 	def score(self) -> float:

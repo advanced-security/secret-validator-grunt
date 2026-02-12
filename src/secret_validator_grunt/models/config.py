@@ -89,6 +89,19 @@ class Config(BaseSettings):
 	    alias="GITHUB_TOKEN",
 	    description="GitHub token for secret scanning API access",
 	)
+	max_continuation_attempts: int = Field(
+	    2,
+	    alias="MAX_CONTINUATION_ATTEMPTS",
+	    description=("Maximum continuation prompts to send when the model "
+	                 "terminates early with an empty response"),
+	)
+	min_response_length: int = Field(
+	    500,
+	    alias="MIN_RESPONSE_LENGTH",
+	    description=(
+	        "Minimum character length to consider a response valid. "
+	        "Responses shorter than this trigger a continuation prompt."),
+	)
 	validate_secret_timeout_seconds: int = Field(
 	    30,
 	    alias="VALIDATE_SECRET_TIMEOUT_SECONDS",
@@ -137,17 +150,42 @@ class Config(BaseSettings):
 		# fallback: comma-separated string
 		return [p.strip() for p in str(v).split(",") if p.strip()]
 
-	@field_validator("analysis_count", "analysis_timeout_seconds",
-	                 "judge_timeout_seconds", "poll_interval_seconds",
-	                 "max_parallel_sessions",
-	                 "validate_secret_timeout_seconds")
+	@field_validator(
+	    "analysis_count",
+	    "analysis_timeout_seconds",
+	    "judge_timeout_seconds",
+	    "poll_interval_seconds",
+	    "max_parallel_sessions",
+	    "validate_secret_timeout_seconds",
+	)
 	@classmethod
 	def validate_positive(cls, v: Any, info: "ValidationInfo") -> Any:
+		"""Reject zero and negative values."""
 		if v is None:
 			return v
 		try:
 			if int(v) <= 0:
 				raise ValueError(f"{info.field_name} must be > 0")
+		except Exception:
+			raise
+		return v
+
+	@field_validator(
+	    "max_continuation_attempts",
+	    "min_response_length",
+	)
+	@classmethod
+	def validate_non_negative(
+	    cls,
+	    v: Any,
+	    info: "ValidationInfo",
+	) -> Any:
+		"""Allow zero (disabled) but reject negative values."""
+		if v is None:
+			return v
+		try:
+			if int(v) < 0:
+				raise ValueError(f"{info.field_name} must be >= 0")
 		except Exception:
 			raise
 		return v
@@ -172,11 +210,11 @@ class Config(BaseSettings):
 			run_params: Validated run parameters with optional overrides.
 		"""
 		_OVERRIDES: list[tuple[str, str]] = [
-			("analyses", "analysis_count"),
-			("timeout", "analysis_timeout_seconds"),
-			("judge_timeout", "judge_timeout_seconds"),
-			("stream_verbose", "stream_verbose"),
-			("show_usage", "show_usage"),
+		    ("analyses", "analysis_count"),
+		    ("timeout", "analysis_timeout_seconds"),
+		    ("judge_timeout", "judge_timeout_seconds"),
+		    ("stream_verbose", "stream_verbose"),
+		    ("show_usage", "show_usage"),
 		]
 		for param_field, config_field in _OVERRIDES:
 			value = getattr(run_params, param_field)

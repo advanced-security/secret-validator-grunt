@@ -95,8 +95,7 @@ def discover_skill_directories(
 	return dirs
 
 
-def _infer_phase_from_path(skill_path: Path,
-                           skills_root: Path) -> str | None:
+def _infer_phase_from_path(skill_path: Path, skills_root: Path) -> str | None:
 	"""
 	Infer the phase from the skill's directory path.
 
@@ -137,7 +136,9 @@ def discover_skills(skills_dir: Path) -> list[SkillInfo]:
 
 	for skill_file in skills_dir.rglob("SKILL.md"):
 		# Skip skills in underscore-prefixed directories (templates)
-		if any(part.startswith("_") for part in skill_file.relative_to(skills_dir).parts):
+		if any(
+		    part.startswith("_")
+		    for part in skill_file.relative_to(skills_dir).parts):
 			continue
 
 		try:
@@ -245,7 +246,8 @@ def discover_hidden_skills(skills_dir: Path) -> list[str]:
 				name = meta.get("name", skill_file.parent.name)
 				hidden.append(name)
 			except Exception as exc:
-				logger.debug("Failed to parse hidden skill %s: %s", skill_file, exc)
+				logger.debug("Failed to parse hidden skill %s: %s", skill_file,
+				             exc)
 				continue
 
 	return hidden

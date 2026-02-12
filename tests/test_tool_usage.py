@@ -5,9 +5,9 @@ import time
 import pytest
 
 from secret_validator_grunt.models.tool_usage import (
-	ToolCallEvent,
-	ToolCallSummary,
-	ToolUsageStats,
+    ToolCallEvent,
+    ToolCallSummary,
+    ToolUsageStats,
 )
 
 

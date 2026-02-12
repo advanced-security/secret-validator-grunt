@@ -86,9 +86,7 @@ class ToolUsageStats(BaseModel):
 	)
 
 	# Internal pending calls (not serialized)
-	_pending: dict[str, dict[str, Any]] = PrivateAttr(
-	    default_factory=dict,
-	)
+	_pending: dict[str, dict[str, Any]] = PrivateAttr(default_factory=dict, )
 
 	@property
 	def total_calls(self) -> int:
@@ -98,16 +96,12 @@ class ToolUsageStats(BaseModel):
 	@property
 	def successful_calls(self) -> int:
 		"""Return number of successful tool calls."""
-		return sum(
-		    1 for c in self.tool_calls if c.status == "success"
-		)
+		return sum(1 for c in self.tool_calls if c.status == "success")
 
 	@property
 	def failed_calls(self) -> int:
 		"""Return number of failed tool calls."""
-		return sum(
-		    1 for c in self.tool_calls if c.status == "failure"
-		)
+		return sum(1 for c in self.tool_calls if c.status == "failure")
 
 	@property
 	def success_rate(self) -> float:
@@ -133,8 +127,7 @@ class ToolUsageStats(BaseModel):
 		for call in self.tool_calls:
 			if call.tool_name not in result:
 				result[call.tool_name] = ToolCallSummary(
-				    tool_name=call.tool_name,
-				)
+				    tool_name=call.tool_name, )
 			summary = result[call.tool_name]
 			summary.total += 1
 			if call.status == "success":

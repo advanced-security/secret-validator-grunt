@@ -3,9 +3,9 @@
 import pytest
 
 from secret_validator_grunt.models.skill_usage import (
-	SkillLoadEvent,
-	SkillLoadStatus,
-	SkillUsageStats,
+    SkillLoadEvent,
+    SkillLoadStatus,
+    SkillUsageStats,
 )
 
 
@@ -306,8 +306,6 @@ class TestSkillUsagePhaseTracking:
 
 	def test_phase_map_persists_in_model_dump(self) -> None:
 		"""phase_map is included in serialized model dump."""
-		stats = SkillUsageStats(
-		    phase_map={"a": "phase-1", "b": "phase-2"},
-		)
+		stats = SkillUsageStats(phase_map={"a": "phase-1", "b": "phase-2"}, )
 		dump = stats.model_dump()
 		assert dump["phase_map"] == {"a": "phase-1", "b": "phase-2"}

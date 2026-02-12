@@ -15,23 +15,23 @@ from secret_validator_grunt.models.report import Report
 
 # Valid verdict values the system may produce.
 VALID_VERDICTS = frozenset({
-	"TRUE_POSITIVE",
-	"FALSE_POSITIVE",
-	"SUSPICIOUS",
-	"INCONCLUSIVE",
+    "TRUE_POSITIVE",
+    "FALSE_POSITIVE",
+    "SUSPICIOUS",
+    "INCONCLUSIVE",
 })
 
 # Required section headings (checked against raw markdown).
 REQUIRED_SECTIONS = [
-	"Executive Summary",
-	"Locations",
-	"Context and Intent",
-	"Verification Testing",
-	"Documentary Evidence",
-	"Evidence Analysis",
-	"Confidence Scoring",
-	"Risk Assessment",
-	"Verdict",
+    "Executive Summary",
+    "Locations",
+    "Context and Intent",
+    "Verification Testing",
+    "Documentary Evidence",
+    "Evidence Analysis",
+    "Confidence Scoring",
+    "Risk Assessment",
+    "Verdict",
 ]
 
 # Confidence label boundaries (exclusive upper for lower tiers).
@@ -44,8 +44,8 @@ REQUIRED_SECTIONS = [
 # Requires an alphabetic lead-in to avoid matching bare numbers
 # like confidence scores (e.g. "6.7").
 FILE_PATH_RE = re.compile(
-	r"(?:`[^`]*\.[a-zA-Z]{1,10}`"     # backtick-wrapped filenames
-	r"|[a-zA-Z][\w/\\.-]*\.\w{2,10})"  # bare paths: alpha start
+    r"(?:`[^`]*\.[a-zA-Z]{1,10}`"  # backtick-wrapped filenames
+    r"|[a-zA-Z][\w/\\.-]*\.\w{2,10})"  # bare paths: alpha start
 )
 
 # Regex for fenced code blocks.
@@ -59,21 +59,21 @@ def has_required_sections(report: Report) -> EvalCheck:
 	for section in REQUIRED_SECTIONS:
 		# Match markdown headings at any level: ## Section, ### Section
 		pattern = re.compile(
-			rf"^#+\s+(?:\d+\.\s+)?{re.escape(section)}",
-			re.MULTILINE | re.IGNORECASE,
+		    rf"^#+\s+(?:\d+\.\s+)?{re.escape(section)}",
+		    re.MULTILINE | re.IGNORECASE,
 		)
 		if not pattern.search(md):
 			missing.append(section)
 	if missing:
 		return EvalCheck(
-			name="has_required_sections",
-			passed=False,
-			message=f"Missing sections: {', '.join(missing)}",
+		    name="has_required_sections",
+		    passed=False,
+		    message=f"Missing sections: {', '.join(missing)}",
 		)
 	return EvalCheck(
-		name="has_required_sections",
-		passed=True,
-		message="All required sections present",
+	    name="has_required_sections",
+	    passed=True,
+	    message="All required sections present",
 	)
 
 
@@ -82,17 +82,15 @@ def valid_verdict(report: Report) -> EvalCheck:
 	verdict = (report.verdict or "").strip().upper()
 	if verdict in VALID_VERDICTS:
 		return EvalCheck(
-			name="valid_verdict",
-			passed=True,
-			message=f"Verdict: {verdict}",
+		    name="valid_verdict",
+		    passed=True,
+		    message=f"Verdict: {verdict}",
 		)
 	return EvalCheck(
-		name="valid_verdict",
-		passed=False,
-		message=(
-			f"Invalid verdict '{report.verdict}'; "
-			f"expected one of: {', '.join(sorted(VALID_VERDICTS))}"
-		),
+	    name="valid_verdict",
+	    passed=False,
+	    message=(f"Invalid verdict '{report.verdict}'; "
+	             f"expected one of: {', '.join(sorted(VALID_VERDICTS))}"),
 	)
 
 
@@ -101,26 +99,26 @@ def valid_confidence_score(report: Report) -> EvalCheck:
 	score = report.confidence_score
 	if score is None:
 		return EvalCheck(
-			name="valid_confidence_score",
-			passed=False,
-			message="Confidence score is missing",
+		    name="valid_confidence_score",
+		    passed=False,
+		    message="Confidence score is missing",
 		)
 	if not isinstance(score, (int, float)):
 		return EvalCheck(
-			name="valid_confidence_score",
-			passed=False,
-			message=f"Confidence score is not numeric: {score}",
+		    name="valid_confidence_score",
+		    passed=False,
+		    message=f"Confidence score is not numeric: {score}",
 		)
 	if 0.0 <= score <= 10.0:
 		return EvalCheck(
-			name="valid_confidence_score",
-			passed=True,
-			message=f"Score: {score}/10",
+		    name="valid_confidence_score",
+		    passed=True,
+		    message=f"Score: {score}/10",
 		)
 	return EvalCheck(
-		name="valid_confidence_score",
-		passed=False,
-		message=f"Score {score} outside valid range 0–10",
+	    name="valid_confidence_score",
+	    passed=False,
+	    message=f"Score {score} outside valid range 0–10",
 	)
 
 
@@ -149,30 +147,28 @@ def confidence_label_matches_score(report: Report) -> EvalCheck:
 	label = (report.confidence_label or "").strip().lower()
 	if score is None or not label:
 		return EvalCheck(
-			name="confidence_label_matches_score",
-			passed=False,
-			message="Score or label missing; cannot validate",
+		    name="confidence_label_matches_score",
+		    passed=False,
+		    message="Score or label missing; cannot validate",
 		)
 	expected = _score_to_label(score)
 	if expected is None:
 		return EvalCheck(
-			name="confidence_label_matches_score",
-			passed=False,
-			message=f"Score {score} outside valid range",
+		    name="confidence_label_matches_score",
+		    passed=False,
+		    message=f"Score {score} outside valid range",
 		)
 	if label == expected:
 		return EvalCheck(
-			name="confidence_label_matches_score",
-			passed=True,
-			message=f"Label '{label}' matches score {score}",
+		    name="confidence_label_matches_score",
+		    passed=True,
+		    message=f"Label '{label}' matches score {score}",
 		)
 	return EvalCheck(
-		name="confidence_label_matches_score",
-		passed=False,
-		message=(
-			f"Label '{label}' does not match score "
-			f"{score}; expected '{expected}'"
-		),
+	    name="confidence_label_matches_score",
+	    passed=False,
+	    message=(f"Label '{label}' does not match score "
+	             f"{score}; expected '{expected}'"),
 	)
 
 
@@ -185,14 +181,14 @@ def metadata_complete(report: Report) -> EvalCheck:
 			missing.append(field)
 	if missing:
 		return EvalCheck(
-			name="metadata_complete",
-			passed=False,
-			message=f"Missing metadata: {', '.join(missing)}",
+		    name="metadata_complete",
+		    passed=False,
+		    message=f"Missing metadata: {', '.join(missing)}",
 		)
 	return EvalCheck(
-		name="metadata_complete",
-		passed=True,
-		message="All metadata fields populated",
+	    name="metadata_complete",
+	    passed=True,
+	    message="All metadata fields populated",
 	)
 
 
@@ -201,14 +197,14 @@ def has_key_finding(report: Report) -> EvalCheck:
 	kf = (report.key_finding or "").strip()
 	if kf:
 		return EvalCheck(
-			name="has_key_finding",
-			passed=True,
-			message="Key finding present",
+		    name="has_key_finding",
+		    passed=True,
+		    message="Key finding present",
 		)
 	return EvalCheck(
-		name="has_key_finding",
-		passed=False,
-		message="Key finding is missing or empty",
+	    name="has_key_finding",
+	    passed=False,
+	    message="Key finding is missing or empty",
 	)
 
 
@@ -218,21 +214,19 @@ def has_verification_tests(report: Report) -> EvalCheck:
 	Severity: warning — not all analyses produce explicit tests.
 	"""
 	has_table = bool(report.verification_tests)
-	has_section = bool(
-		(report.verification_testing or "").strip()
-	)
+	has_section = bool((report.verification_testing or "").strip())
 	if has_table or has_section:
 		return EvalCheck(
-			name="has_verification_tests",
-			passed=True,
-			message="Verification testing content present",
-			severity="warning",
+		    name="has_verification_tests",
+		    passed=True,
+		    message="Verification testing content present",
+		    severity="warning",
 		)
 	return EvalCheck(
-		name="has_verification_tests",
-		passed=False,
-		message="No verification testing content found",
-		severity="warning",
+	    name="has_verification_tests",
+	    passed=False,
+	    message="No verification testing content found",
+	    severity="warning",
 	)
 
 
@@ -246,16 +240,16 @@ def has_code_evidence(report: Report) -> EvalCheck:
 	has_code = bool(CODE_BLOCK_RE.search(md))
 	if has_paths or has_code:
 		return EvalCheck(
-			name="has_code_evidence",
-			passed=True,
-			message="Report contains code evidence",
-			severity="warning",
+		    name="has_code_evidence",
+		    passed=True,
+		    message="Report contains code evidence",
+		    severity="warning",
 		)
 	return EvalCheck(
-		name="has_code_evidence",
-		passed=False,
-		message="No file paths or code snippets found",
-		severity="warning",
+	    name="has_code_evidence",
+	    passed=False,
+	    message="No file paths or code snippets found",
+	    severity="warning",
 	)
 
 
@@ -270,46 +264,42 @@ def verdict_confidence_coherent(report: Report) -> EvalCheck:
 	score = report.confidence_score
 	if verdict != "INCONCLUSIVE" or score is None:
 		return EvalCheck(
-			name="verdict_confidence_coherent",
-			passed=True,
-			message="Verdict-confidence coherence OK",
+		    name="verdict_confidence_coherent",
+		    passed=True,
+		    message="Verdict-confidence coherence OK",
 		)
 	if score >= 7.0:
 		return EvalCheck(
-			name="verdict_confidence_coherent",
-			passed=False,
-			message=(
-				f"INCONCLUSIVE verdict with high confidence "
-				f"({score}/10) is incoherent"
-			),
+		    name="verdict_confidence_coherent",
+		    passed=False,
+		    message=(f"INCONCLUSIVE verdict with high confidence "
+		             f"({score}/10) is incoherent"),
 		)
 	return EvalCheck(
-		name="verdict_confidence_coherent",
-		passed=True,
-		message=(
-			f"INCONCLUSIVE with score {score}/10 is coherent"
-		),
+	    name="verdict_confidence_coherent",
+	    passed=True,
+	    message=(f"INCONCLUSIVE with score {score}/10 is coherent"),
 	)
 
 
 # --- Orchestrator ---
 
 ALL_CHECKS = [
-	has_required_sections,
-	valid_verdict,
-	valid_confidence_score,
-	confidence_label_matches_score,
-	metadata_complete,
-	has_key_finding,
-	has_verification_tests,
-	has_code_evidence,
-	verdict_confidence_coherent,
+    has_required_sections,
+    valid_verdict,
+    valid_confidence_score,
+    confidence_label_matches_score,
+    metadata_complete,
+    has_key_finding,
+    has_verification_tests,
+    has_code_evidence,
+    verdict_confidence_coherent,
 ]
 
 
 def run_all_checks(
-	report: Report,
-	report_id: str = "unknown",
+    report: Report,
+    report_id: str = "unknown",
 ) -> EvalResult:
 	"""Run all eval checks on a report and return results.
 

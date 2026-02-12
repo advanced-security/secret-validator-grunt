@@ -56,11 +56,11 @@ class SummaryData(BaseModel):
 
 
 def build_summary_data(
-	winner_index: int,
-	analysis_results: list,
-	output_dir: Path,
-	judge_result: object | None = None,
-	show_usage: bool = False,
+    winner_index: int,
+    analysis_results: list,
+    output_dir: Path,
+    judge_result: object | None = None,
+    show_usage: bool = False,
 ) -> SummaryData:
 	"""Extract display data from analysis results and judge result.
 
@@ -84,8 +84,8 @@ def build_summary_data(
 		win = analysis_results[winner_index]
 		report = win.report
 		winner = WinnerInfo(
-			workspace=win.workspace,
-			final_report_path=str(output_dir / "final-report.md"),
+		    workspace=win.workspace,
+		    final_report_path=str(output_dir / "final-report.md"),
 		)
 		if report:
 			winner.verdict = report.verdict
@@ -100,39 +100,34 @@ def build_summary_data(
 	# Judge info
 	if judge_result:
 		data.judge = JudgeInfo(
-			winner_index=winner_index,
-			rationale=getattr(judge_result, "rationale", None),
-			verdict=getattr(judge_result, "verdict", None),
-			workspace=getattr(judge_result, "workspace", None),
+		    winner_index=winner_index,
+		    rationale=getattr(judge_result, "rationale", None),
+		    verdict=getattr(judge_result, "verdict", None),
+		    workspace=getattr(judge_result, "workspace", None),
 		)
 
 	# Workspace list
 	for res in analysis_results:
 		if res.workspace:
 			data.workspaces.append(
-				WorkspaceEntry(run_id=str(res.run_id), workspace=res.workspace)
-			)
+			    WorkspaceEntry(run_id=str(res.run_id),
+			                   workspace=res.workspace))
 	if judge_result and getattr(judge_result, "workspace", None):
 		data.workspaces.append(
-			WorkspaceEntry(run_id="judge", workspace=judge_result.workspace)
-		)
+		    WorkspaceEntry(run_id="judge", workspace=judge_result.workspace))
 
 	# Usage flags
 	if show_usage:
-		data.has_skill_usage = any(
-			res.skill_usage for res in analysis_results
-		)
-		data.has_tool_usage = any(
-			res.tool_usage for res in analysis_results
-		)
+		data.has_skill_usage = any(res.skill_usage for res in analysis_results)
+		data.has_tool_usage = any(res.tool_usage for res in analysis_results)
 
 	return data
 
 
 __all__ = [
-	"SummaryData",
-	"WinnerInfo",
-	"JudgeInfo",
-	"WorkspaceEntry",
-	"build_summary_data",
+    "SummaryData",
+    "WinnerInfo",
+    "JudgeInfo",
+    "WorkspaceEntry",
+    "build_summary_data",
 ]

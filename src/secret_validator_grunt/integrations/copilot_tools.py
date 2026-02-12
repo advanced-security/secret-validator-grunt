@@ -108,9 +108,9 @@ def secret_scanning_alert_tool(config: Config, context_repo: str | None,
 	)
 
 
-def secret_scanning_alert_locations_tool(
-        config: Config, context_repo: str | None,
-        context_alert_id: str | None) -> Tool:
+def secret_scanning_alert_locations_tool(config: Config,
+                                         context_repo: str | None,
+                                         context_alert_id: str | None) -> Tool:
 	"""Define a tool that fetches secret scanning alert locations via GitHub API."""
 
 	def handler(invocation: ToolInvocation) -> ToolResult:
@@ -174,18 +174,13 @@ def _import_registry():
 	try:
 		from validate_secrets.core import registry as _reg
 		from validate_secrets.core.exceptions import (
-		    ValidatorError as _VErr,
-		)
+		    ValidatorError as _VErr, )
 
 		class _Registry:
 			"""Thin wrapper around validate_secrets."""
 
-			get_validator = staticmethod(
-			    _reg.get_validator
-			)
-			get_validator_info = staticmethod(
-			    _reg.get_validator_info
-			)
+			get_validator = staticmethod(_reg.get_validator)
+			get_validator_info = staticmethod(_reg.get_validator_info)
 			ValidatorError = _VErr
 
 		return _Registry()
@@ -205,9 +200,7 @@ def validate_secret_tool(config: Config) -> Tool:
 	"""
 
 	def handler(invocation: ToolInvocation) -> ToolResult:
-		params: dict[str, Any] = (
-		    invocation.get("arguments") or {}
-		)
+		params: dict[str, Any] = (invocation.get("arguments") or {})
 		secret = params.get("secret")
 		secret_type = params.get("secret_type")
 		timeout = params.get(
@@ -216,26 +209,22 @@ def validate_secret_tool(config: Config) -> Tool:
 		)
 
 		if not secret or not secret_type:
-			raise ValueError(
-			    "secret and secret_type are required"
-			)
+			raise ValueError("secret and secret_type are required")
 
 		registry = _import_registry()
 		if registry is None:
-			return _failure(
-			    "validate-secrets package is not installed. "
-			    "Use manual verification methods instead."
-			)
+			return _failure("validate-secrets package is not installed. "
+			                "Use manual verification methods instead.")
 
 		try:
-			validator_class = registry.get_validator(
-			    secret_type
-			)
+			validator_class = registry.get_validator(secret_type)
 		except registry.ValidatorError:
 			return _success(
 			    json.dumps({
-			        "secret_type": secret_type,
-			        "status": "no_validator",
+			        "secret_type":
+			        secret_type,
+			        "status":
+			        "no_validator",
 			        "message":
 			        f"No validator registered for "
 			        f"'{secret_type}'. Proceed with "
@@ -268,9 +257,7 @@ def validate_secret_tool(config: Config) -> Tool:
 			    },
 			)
 
-		status = {True: "valid", False: "invalid"}.get(
-		    result, "error"
-		)
+		status = {True: "valid", False: "invalid"}.get(result, "error")
 		try:
 			metadata = validator.get_metadata()
 		except Exception:  # noqa: BLE001
@@ -278,8 +265,10 @@ def validate_secret_tool(config: Config) -> Tool:
 
 		return _success(
 		    json.dumps({
-		        "secret_type": secret_type,
-		        "status": status,
+		        "secret_type":
+		        secret_type,
+		        "status":
+		        status,
 		        "validator_name":
 		        metadata.get("name", secret_type),
 		        "validator_description":
@@ -294,26 +283,25 @@ def validate_secret_tool(config: Config) -> Tool:
 
 	return Tool(
 	    name="validate_secret",
-	    description=(
-	        "Validate a secret using the validate-secrets "
-	        "library. Returns valid/invalid/error/no_validator."
-	    ),
+	    description=("Validate a secret using the validate-secrets "
+	                 "library. Returns valid/invalid/error/no_validator."),
 	    parameters={
 	        "type": "object",
 	        "properties": {
 	            "secret": {
 	                "type": "string",
-	                "description":
-	                "The secret value to validate",
+	                "description": "The secret value to validate",
 	            },
 	            "secret_type": {
-	                "type": "string",
+	                "type":
+	                "string",
 	                "description":
 	                "The secret type identifier matching "
 	                "the alert's secret_type",
 	            },
 	            "timeout": {
-	                "type": "integer",
+	                "type":
+	                "integer",
 	                "description":
 	                "Timeout in seconds for network-based "
 	                "validators (default: 30)",
@@ -335,20 +323,14 @@ def list_secret_validators_tool() -> Tool:
 	def handler(invocation: ToolInvocation) -> ToolResult:
 		registry = _import_registry()
 		if registry is None:
-			return _failure(
-			    "validate-secrets package is not installed."
-			)
+			return _failure("validate-secrets package is not installed.")
 
 		try:
 			info = registry.get_validator_info()
-			validators = [
-			    {
-			        "name": name,
-			        "description":
-			        meta.get("description", ""),
-			    }
-			    for name, meta in info.items()
-			]
+			validators = [{
+			    "name": name,
+			    "description": meta.get("description", ""),
+			} for name, meta in info.items()]
 			return _success(
 			    json.dumps({
 			        "validators": validators,
@@ -357,16 +339,12 @@ def list_secret_validators_tool() -> Tool:
 			    {"validators": validators},
 			)
 		except Exception as exc:  # noqa: BLE001
-			return _failure(
-			    f"Failed to list validators: {exc}"
-			)
+			return _failure(f"Failed to list validators: {exc}")
 
 	return Tool(
 	    name="list_secret_validators",
-	    description=(
-	        "List available secret validators from the "
-	        "validate-secrets library."
-	    ),
+	    description=("List available secret validators from the "
+	                 "validate-secrets library."),
 	    parameters={
 	        "type": "object",
 	        "properties": {},
@@ -380,9 +358,7 @@ def get_session_tools(config: Config, org_repo: str | None,
 	"""Return tools to register for a session."""
 	return [
 	    secret_scanning_alert_tool(config, org_repo, alert_id),
-	    secret_scanning_alert_locations_tool(
-	        config, org_repo, alert_id
-	    ),
+	    secret_scanning_alert_locations_tool(config, org_repo, alert_id),
 	    validate_secret_tool(config),
 	    list_secret_validators_tool(),
 	]

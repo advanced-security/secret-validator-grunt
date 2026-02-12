@@ -42,14 +42,13 @@ class SkillLoadEvent(BaseModel):
 	    default_factory=lambda: datetime.now(timezone.utc).isoformat(),
 	    description="ISO timestamp of completion",
 	)
-	phase: str | None = Field(default=None,
-	                             description="Skill phase if known")
+	phase: str | None = Field(default=None, description="Skill phase if known")
 	is_required: bool = Field(default=False,
 	                          description="Whether skill is required")
 	error_message: str | None = Field(default=None,
-	                                     description="Error if failed")
+	                                  description="Error if failed")
 	duration_ms: float | None = Field(default=None,
-	                                     description="Load duration in ms")
+	                                  description="Load duration in ms")
 
 
 class SkillUsageStats(BaseModel):
@@ -127,9 +126,7 @@ class SkillUsageStats(BaseModel):
 		result: dict[str, list[str]] = {}
 		for event in self.load_events:
 			if event.status == SkillLoadStatus.LOADED and event.phase:
-				result.setdefault(event.phase, []).append(
-				    event.skill_name,
-				)
+				result.setdefault(event.phase, []).append(event.skill_name, )
 		return result
 
 	def available_by_phase(self) -> dict[str, list[str]]:
