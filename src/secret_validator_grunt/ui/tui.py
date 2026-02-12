@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, List
+
 from collections import deque
 
 from rich.console import Console, Group
@@ -27,14 +27,14 @@ class RunDisplayState:
 
 	run_id: str
 	status: str = "pending"  # pending|running|completed|failed
-	workspace: Optional[str] = None
+	workspace: str | None = None
 	messages: deque[str] = field(
 	    default_factory=lambda: deque(maxlen=_MAX_MESSAGES))
 	# Outcome fields from analysis
-	verdict: Optional[str] = None
-	confidence: Optional[str] = None
-	risk_level: Optional[str] = None
-	key_finding: Optional[str] = None
+	verdict: str | None = None
+	confidence: str | None = None
+	risk_level: str | None = None
+	key_finding: str | None = None
 
 	def add_message(self, msg: str) -> None:
 		"""Add a message to the scrolling log."""
@@ -99,7 +99,7 @@ class TUI:
 		    for i in range(analysis_count)
 		}
 		self.states["judge"] = RunDisplayState(run_id="judge")
-		self.live: Optional[Live] = None
+		self.live: Live | None = None
 
 	def _build_table(self) -> Group:
 		"""Build the display tables."""
@@ -176,7 +176,7 @@ class TUI:
 		if self.live:
 			self.live.stop()
 
-	def _render_usage_table(self, analysis_results: List,
+	def _render_usage_table(self, analysis_results: list,
 	                        judge_result) -> Table:
 		"""Render token usage statistics table."""
 		from secret_validator_grunt.models.usage import (UsageStats, aggregate,
@@ -198,18 +198,18 @@ class TUI:
 			)
 
 		for res in analysis_results:
-			u = getattr(res, "usage", None)
+			u = res.usage
 			if u:
 				inp, out, cost, dur = fmt_usage(u)
 				table.add_row(f"run {res.run_id}", inp, out, cost, dur)
 
-		ju = getattr(judge_result, "usage", None)
+		ju = judge_result.usage if judge_result else None
 		if ju:
 			inp, out, cost, dur = fmt_usage(ju)
 			table.add_row("judge", inp, out, cost, dur)
 
 		# Totals
-		all_usages = [getattr(r, "usage", None) for r in analysis_results]
+		all_usages = [r.usage for r in analysis_results]
 		if ju:
 			all_usages.append(ju)
 		all_usages = [u for u in all_usages if u]
@@ -225,7 +225,7 @@ class TUI:
 			)
 		return table
 
-	def _render_skill_usage_table(self, analysis_results: List) -> Table:
+	def _render_skill_usage_table(self, analysis_results: list) -> Table:
 		"""
 		Render skill usage statistics table.
 
@@ -243,7 +243,7 @@ class TUI:
 		table.add_column("Compliance")
 
 		for res in analysis_results:
-			su = getattr(res, "skill_usage", None)
+			su = res.skill_usage
 			if su:
 				loaded_count = len(su.loaded_skills)
 				available_count = len(su.available_skills)
@@ -277,7 +277,7 @@ class TUI:
 
 		return table
 
-	def _render_tool_usage_table(self, analysis_results: List) -> Table:
+	def _render_tool_usage_table(self, analysis_results: list) -> Table:
 		"""
 		Render tool usage statistics table.
 
@@ -296,7 +296,7 @@ class TUI:
 		table.add_column("Top Tools")
 
 		for res in analysis_results:
-			tu = getattr(res, "tool_usage", None)
+			tu = res.tool_usage
 			if tu:
 				rate = tu.success_rate
 				rate_style = "green" if rate == 100 else (
@@ -322,10 +322,10 @@ class TUI:
 
 		return table
 
-	def update_outcome(self, run_id: str, verdict: Optional[str] = None,
-	                   confidence: Optional[str] = None,
-	                   risk_level: Optional[str] = None,
-	                   key_finding: Optional[str] = None) -> None:
+	def update_outcome(self, run_id: str, verdict: str | None = None,
+	                   confidence: str | None = None,
+	                   risk_level: str | None = None,
+	                   key_finding: str | None = None) -> None:
 		"""Update outcome information for a run."""
 		state = self.states.get(run_id)
 		if not state:
@@ -341,17 +341,31 @@ class TUI:
 		if self.live:
 			self.live.update(self._build_table())
 
-	def print_summary(self, winner_index: int, analysis_results: List,
+	def print_summary(self, winner_index: int, analysis_results: list,
 	                  output_dir: Path, judge_result=None):
 		"""Print final summary after runs complete."""
+		from secret_validator_grunt.models.summary import build_summary_data
+
 		self.finalize()
 		self.console.print()
 
-		# Build winner info table
-		if 0 <= winner_index < len(analysis_results):
-			win = analysis_results[winner_index]
-			report = getattr(win, "report", None)
+		data = build_summary_data(
+			winner_index, analysis_results, output_dir,
+			judge_result=judge_result, show_usage=self.show_usage,
+		)
+		self._render_summary(data, analysis_results, judge_result)
 
+	def _render_summary(self, data, analysis_results: list,
+	                    judge_result=None):
+		"""Render the summary to console using pre-extracted data.
+
+		Parameters:
+			data: SummaryData model with all display values.
+			analysis_results: Original results (needed for usage tables).
+			judge_result: Original judge result (needed for usage table).
+		"""
+		# Winner table
+		if data.winner:
 			result_table = Table(
 			    title="Winner Report",
 			    box=box.ROUNDED,
@@ -362,80 +376,62 @@ class TUI:
 			result_table.add_column("Field", style="bold")
 			result_table.add_column("Value")
 
-			if report:
-				verdict = getattr(report, "verdict", None)
-				if verdict:
-					style = "green" if "FALSE" in verdict.upper() else "red"
-					result_table.add_row("Verdict", Text(verdict, style=style))
-				if getattr(report, "confidence_score", None):
-					label = getattr(report, "confidence_label", "") or ""
-					result_table.add_row(
-					    "Confidence",
-					    f"{report.confidence_score}/10 ({label})")
-				if getattr(report, "risk_level", None):
-					result_table.add_row("Risk Level", report.risk_level)
-				if getattr(report, "secret_type", None):
-					result_table.add_row("Secret Type", report.secret_type)
-				if getattr(report, "key_finding", None):
-					result_table.add_row("Key Finding", report.key_finding)
-
-			if getattr(win, "workspace", None):
-				result_table.add_row("Workspace", win.workspace)
-			result_table.add_row("Final Report",
-			                     str(output_dir / "final-report.md"))
+			w = data.winner
+			if w.verdict:
+				style = "green" if "FALSE" in w.verdict.upper() else "red"
+				result_table.add_row("Verdict", Text(w.verdict, style=style))
+			if w.confidence:
+				result_table.add_row("Confidence", w.confidence)
+			if w.risk_level:
+				result_table.add_row("Risk Level", w.risk_level)
+			if w.secret_type:
+				result_table.add_row("Secret Type", w.secret_type)
+			if w.key_finding:
+				result_table.add_row("Key Finding", w.key_finding)
+			if w.workspace:
+				result_table.add_row("Workspace", w.workspace)
+			if w.final_report_path:
+				result_table.add_row("Final Report", w.final_report_path)
 
 			self.console.print(result_table)
 
-		# Show judge rationale if available
-		if judge_result:
-			if getattr(judge_result, "rationale", None) or getattr(
-			    judge_result, "verdict", None):
-				judge_table = Table(
-				    title="Judge Decision",
-				    box=box.ROUNDED,
-				    show_header=False,
-				    expand=True,
-				    title_style="bold yellow",
-				)
-				judge_table.add_column("Field", style="bold")
-				judge_table.add_column("Value")
-				judge_table.add_row("Winner", f"Report {winner_index}")
-				if getattr(judge_result, "rationale", None):
-					judge_table.add_row("Rationale", judge_result.rationale)
-				if getattr(judge_result, "verdict", None):
-					judge_table.add_row("Verdict", judge_result.verdict)
-				self.console.print(judge_table)
+		# Judge table
+		if data.judge and (data.judge.rationale or data.judge.verdict):
+			judge_table = Table(
+			    title="Judge Decision",
+			    box=box.ROUNDED,
+			    show_header=False,
+			    expand=True,
+			    title_style="bold yellow",
+			)
+			judge_table.add_column("Field", style="bold")
+			judge_table.add_column("Value")
+			judge_table.add_row("Winner", f"Report {data.judge.winner_index}")
+			if data.judge.rationale:
+				judge_table.add_row("Rationale", data.judge.rationale)
+			if data.judge.verdict:
+				judge_table.add_row("Verdict", data.judge.verdict)
+			self.console.print(judge_table)
 
 		# Workspaces summary
 		self.console.print("\n[dim]All workspaces:[/dim]")
-		for res in analysis_results:
-			if getattr(res, "workspace", None):
-				self.console.print(f"  Run {res.run_id}: {res.workspace}")
-		if judge_result and getattr(judge_result, "workspace", None):
-			self.console.print(f"  Judge: {judge_result.workspace}")
+		for entry in data.workspaces:
+			label = "Judge" if entry.run_id == "judge" else f"Run {entry.run_id}"
+			self.console.print(f"  {label}: {entry.workspace}")
 
-		if self.show_usage and judge_result is not None:
+		if data.show_usage and judge_result is not None:
 			self.console.print("\n[bold]Usage[/bold]")
 			self.console.print(
 			    self._render_usage_table(analysis_results, judge_result))
 
-		# Show skill and tool usage tables (gated by --show-usage)
-		if self.show_usage:
-			has_skill_usage = any(
-			    getattr(res, "skill_usage", None)
-			    for res in analysis_results
-			)
-			if has_skill_usage:
+		if data.show_usage:
+			if data.has_skill_usage:
 				self.console.print("\n[bold]Skill Usage[/bold]")
 				self.console.print(
 				    self._render_skill_usage_table(analysis_results),
 				)
 
-			has_tool_usage = any(
-			    getattr(res, "tool_usage", None)
-			    for res in analysis_results
-			)
-			if has_tool_usage:
+			if data.has_tool_usage:
 				self.console.print("\n[bold]Tool Usage[/bold]")
 				self.console.print(
 				    self._render_tool_usage_table(analysis_results),

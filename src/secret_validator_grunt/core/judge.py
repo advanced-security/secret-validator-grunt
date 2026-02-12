@@ -7,9 +7,7 @@ and select the winning report based on quality metrics.
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
-from typing import List, Optional
 
 from secret_validator_grunt.models.agent_config import AgentConfig
 from secret_validator_grunt.models.config import Config
@@ -20,18 +18,21 @@ from secret_validator_grunt.utils.parsing import extract_json
 from secret_validator_grunt.ui.streaming import (
     StreamCollector,
     ProgressCallback,
-    fetch_last_assistant_message,
 )
 from secret_validator_grunt.integrations.custom_agents import to_custom_agent
+from secret_validator_grunt.integrations.copilot_tools import get_session_tools
 from secret_validator_grunt.utils.paths import ensure_within
 from secret_validator_grunt.utils.logging import get_logger
 from secret_validator_grunt.utils.protocols import CopilotClientProtocol
-from secret_validator_grunt.core.skills import (
-    discover_skill_directories,
-    discover_hidden_skills,
-    DEFAULT_SKILLS_DIRECTORY,
-)
+from secret_validator_grunt.core.skills import discover_skill_directories
 from secret_validator_grunt.loaders.prompts import load_prompt
+from secret_validator_grunt.core.session import (
+    resolve_run_params,
+    load_and_validate_template,
+    discover_all_disabled_skills,
+    send_and_collect,
+    destroy_session_safe,
+)
 
 logger = get_logger(__name__)
 
@@ -79,7 +80,7 @@ def _format_skill_usage_summary(result: AgentRunResult) -> str:
 	return "\n".join(lines)
 
 
-def _format_reports(results: List[AgentRunResult]) -> str:
+def _format_reports(results: list[AgentRunResult]) -> str:
 	"""
 	Combine reports into a single markdown blob for judging.
 
@@ -103,7 +104,7 @@ def _format_reports(results: List[AgentRunResult]) -> str:
 
 def _build_judge_prompt(
     prompt: str,
-    report_template: Optional[str],
+    report_template: str | None,
     context_block: str,
     reports_blob: str,
 ) -> str:
@@ -118,27 +119,19 @@ async def run_judge(
     client: CopilotClientProtocol,
     config: Config,
     judge_agent: AgentConfig,
-    results: List[AgentRunResult],
-    run_params: Optional[RunParams] = None,
-    org_repo: Optional[str] = None,
-    alert_id: Optional[str] = None,
-    progress_cb: Optional[ProgressCallback] = None,
+    results: list[AgentRunResult],
+    run_params: RunParams | None = None,
+    org_repo: str | None = None,
+    alert_id: str | None = None,
+    progress_cb: ProgressCallback | None = None,
 ) -> JudgeResult:
 	"""Run judge session to select the best report among analysis results."""
 	logger.info("judge start org_repo=%s alert_id=%s", org_repo, alert_id)
 	prompt = load_prompt("judge_task.md")
 	reports_blob = _format_reports(results)
-	from secret_validator_grunt.loaders.templates import load_report_template
 
-	report_template = load_report_template(config.report_template_file)
-	if not report_template:
-		raise RuntimeError(
-		    f"Report template not found at {config.report_template_file}")
-	rp = run_params
-	if rp is None:
-		if not org_repo or not alert_id:
-			raise ValueError("org_repo and alert_id are required")
-		rp = RunParams(org_repo=org_repo, alert_id=alert_id)
+	report_template = load_and_validate_template(config.report_template_file)
+	rp = resolve_run_params(run_params, org_repo, alert_id)
 	alert_dir = ensure_within(
 	    config.output_path,
 	    config.output_path / rp.org_repo_slug / rp.alert_id_slug)
@@ -164,16 +157,12 @@ async def run_judge(
 	    show_usage=config.show_usage,
 	)
 
-	from secret_validator_grunt.integrations.copilot_tools import get_session_tools
 	session_tools = get_session_tools(config, org_repo, alert_id)
 	chosen_model = judge_agent.model or config.model
-	# Discover hidden skills (underscore-prefixed) to disable at runtime
-	hidden_skills = discover_hidden_skills(DEFAULT_SKILLS_DIRECTORY)
-	disabled_skills = list(set(hidden_skills + (config.disabled_skills or [])))
+	disabled_skills = discover_all_disabled_skills(config)
 
 	session = None
 	try:
-		# NOTE: use available_tools (strings) because client expects Tool objects for `tools`
 		session = await client.create_session({
 		    "model":
 		    chosen_model,
@@ -197,33 +186,12 @@ async def run_judge(
 		})
 		session.on(collector.handler)
 
-		raw: Optional[str] = None
-		try:
-			response = await session.send_and_wait(
-			    {"prompt": agent_prompt}, timeout=config.judge_timeout_seconds)
-			if response and getattr(response, "data", None):
-				raw = response.data.content
-		except asyncio.TimeoutError as te:
-			if progress_cb:
-				progress_cb("judge", f"timeout_waiting_for_idle: {te}")
-			try:
-				await session.abort()
-			except Exception:
-				pass
-		except Exception as exc:
-			if progress_cb:
-				progress_cb("judge", f"session_error: {exc}")
-			raw = (raw or "") + (f"\nERROR: {exc}" if raw else f"ERROR: {exc}")
-
-		if not raw:
-			raw = collector.text or (
-			    await fetch_last_assistant_message(session) or "")
+		raw = await send_and_collect(
+		    session, agent_prompt, config.judge_timeout_seconds,
+		    collector, "judge", progress_cb, reraise=False,
+		)
 	finally:
-		if session:
-			try:
-				await session.destroy()
-			except Exception:
-				pass
+		await destroy_session_safe(session, "judge")
 
 	parsed = extract_json(raw)
 	if parsed:
@@ -238,7 +206,7 @@ async def run_judge(
 				progress_cb("judge", "judge_completed")
 			return jr
 		except Exception:
-			pass
+			logger.debug("failed to parse JudgeResult from JSON", exc_info=True)
 	# fallback with error
 	logger.warning("judge failed parse org_repo=%s alert_id=%s", org_repo,
 	               alert_id)

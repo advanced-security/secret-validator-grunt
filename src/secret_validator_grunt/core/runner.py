@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import List, Optional
 
 from secret_validator_grunt.models.config import Config, load_env
 from secret_validator_grunt.loaders.agents import load_agent
@@ -30,10 +29,10 @@ logger = get_logger(__name__)
 
 async def run_all(
     config: Config,
-    org_repo: Optional[str] = None,
-    alert_id: Optional[str] = None,
-    run_params: Optional["RunParams"] = None,
-    progress_cb: Optional[ProgressCallback] = None,
+    org_repo: str | None = None,
+    alert_id: str | None = None,
+    run_params: "RunParams" | None = None,
+    progress_cb: ProgressCallback | None = None,
 ) -> RunOutcome:
 	"""
 	Run all analyses concurrently and judge the best report.
@@ -79,7 +78,7 @@ async def run_all(
 		tasks = [run_one(i) for i in range(config.analysis_count)]
 		results_raw = await asyncio.gather(*tasks, return_exceptions=True)
 		logger.debug("analysis tasks completed")
-		results: List[AgentRunResult] = []
+		results: list[AgentRunResult] = []
 		for idx, res in enumerate(results_raw):
 			if isinstance(res, Exception):
 				results.append(

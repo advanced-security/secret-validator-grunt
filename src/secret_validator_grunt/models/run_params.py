@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 from pydantic_core.core_schema import ValidationInfo
 
@@ -27,15 +26,15 @@ class RunParams(BaseModel):
 
 	org_repo: str = Field(description="owner/repo")
 	alert_id: str = Field(description="Secret scanning alert id")
-	analyses: Optional[int] = Field(default=None,
+	analyses: int | None = Field(default=None,
 	                                description="Override analyses")
-	timeout: Optional[int] = Field(default=None,
+	timeout: int | None = Field(default=None,
 	                               description="Analysis timeout")
-	judge_timeout: Optional[int] = Field(default=None,
+	judge_timeout: int | None = Field(default=None,
 	                                     description="Judge timeout")
-	stream_verbose: Optional[bool] = Field(default=None,
+	stream_verbose: bool | None = Field(default=None,
 	                                       description="Stream deltas")
-	show_usage: Optional[bool] = Field(default=None,
+	show_usage: bool | None = Field(default=None,
 	                                   description="Show usage metrics")
 
 	@field_validator('org_repo')
@@ -55,8 +54,8 @@ class RunParams(BaseModel):
 
 	@field_validator('analyses', 'timeout', 'judge_timeout')
 	@classmethod
-	def validate_positive(cls, v: Optional[int],
-	                      info: ValidationInfo) -> Optional[int]:
+	def validate_positive(cls, v: int | None,
+	                      info: ValidationInfo) -> int | None:
 		if v is None:
 			return v
 		if v <= 0:

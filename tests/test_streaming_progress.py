@@ -626,3 +626,99 @@ async def test_diagnostics_json_not_written_without_show_usage():
 	assert res.workspace is not None
 	diag_path = __import__("pathlib").Path(res.workspace) / "diagnostics.json"
 	assert not diag_path.exists(), "diagnostics.json should NOT be written"
+
+
+# --- T2: SESSION_ERROR handler test ---
+
+
+def test_session_error_fires_progress_callback(tmp_path):
+	"""SESSION_ERROR event should invoke progress_cb with 'session_error:' prefix."""
+	from secret_validator_grunt.ui.streaming import StreamCollector
+
+	seen = []
+
+	def progress_cb(run_id, msg):
+		seen.append((run_id, msg))
+
+	collector = StreamCollector(
+	    run_id="err-1",
+	    stream_log_path=tmp_path / "stream.log",
+	    progress_cb=progress_cb,
+	)
+	error_data = type("D", (), {"message": "something broke"})
+	collector.handler(DummyEvent(SessionEventType.SESSION_ERROR, error_data))
+
+	assert len(seen) == 1
+	assert seen[0][0] == "err-1"
+	assert "session_error:" in seen[0][1]
+	assert "something broke" in seen[0][1]
+
+
+def test_session_error_without_message_attr(tmp_path):
+	"""SESSION_ERROR with no 'message' attr falls back to str(data)."""
+	from secret_validator_grunt.ui.streaming import StreamCollector
+
+	seen = []
+
+	def progress_cb(run_id, msg):
+		seen.append(msg)
+
+	collector = StreamCollector(
+	    run_id="err-2",
+	    stream_log_path=tmp_path / "stream.log",
+	    progress_cb=progress_cb,
+	)
+	error_data = type("D", (), {"message": None})
+	collector.handler(DummyEvent(SessionEventType.SESSION_ERROR, error_data))
+
+	# Falls back to str(data)
+	assert len(seen) == 1
+	assert "session_error:" in seen[0]
+
+
+def test_session_error_no_progress_cb(tmp_path):
+	"""SESSION_ERROR with no progress_cb should not crash."""
+	from secret_validator_grunt.ui.streaming import StreamCollector
+
+	collector = StreamCollector(
+	    run_id="err-3",
+	    stream_log_path=tmp_path / "stream.log",
+	    progress_cb=None,
+	)
+	error_data = type("D", (), {"message": "boom"})
+	# Should not raise
+	collector.handler(DummyEvent(SessionEventType.SESSION_ERROR, error_data))
+
+
+# --- T3: _write_stream failure handling test ---
+
+
+def test_write_stream_failure_silenced(tmp_path):
+	"""_write_stream should silently catch write errors without crashing."""
+	from secret_validator_grunt.ui.streaming import StreamCollector
+
+	collector = StreamCollector(
+	    run_id="ws-1",
+	    stream_log_path=tmp_path / "stream.log",
+	)
+	# Make the path unwritable by pointing at a directory
+	collector.stream_log_path = tmp_path / "no-such-dir" / "subdir" / "stream.log"
+	# Force the parent to not be creatable
+	(tmp_path / "no-such-dir").write_text("I am a file, not a dir")
+
+	# Should not raise — error is silently logged
+	collector._write_stream("some content")
+
+
+def test_write_stream_success(tmp_path):
+	"""_write_stream writes content to the log file."""
+	from secret_validator_grunt.ui.streaming import StreamCollector
+
+	log_path = tmp_path / "stream.log"
+	collector = StreamCollector(
+	    run_id="ws-2",
+	    stream_log_path=log_path,
+	)
+	collector._write_stream("hello ")
+	collector._write_stream("world")
+	assert log_path.read_text() == "hello world"

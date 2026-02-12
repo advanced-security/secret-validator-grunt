@@ -8,7 +8,8 @@ GitHub's Secret Scanning API and the validate-secrets library.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+import functools
+from typing import Any
 
 from copilot.types import Tool, ToolInvocation, ToolResult
 
@@ -50,12 +51,12 @@ def _failure(msg: str) -> ToolResult:
 	}
 
 
-def secret_scanning_alert_tool(config: Config, context_repo: Optional[str],
-                               context_alert_id: Optional[str]) -> Tool:
+def secret_scanning_alert_tool(config: Config, context_repo: str | None,
+                               context_alert_id: str | None) -> Tool:
 	"""Define a tool that fetches secret scanning alert details via GitHub API."""
 
 	def handler(invocation: ToolInvocation) -> ToolResult:
-		params: Dict[str, Any] = invocation.get("arguments") or {}
+		params: dict[str, Any] = invocation.get("arguments") or {}
 		repo = params.get("repo") or context_repo
 		alert_number = params.get("alert_number") or context_alert_id
 		token = config.github_token
@@ -108,12 +109,12 @@ def secret_scanning_alert_tool(config: Config, context_repo: Optional[str],
 
 
 def secret_scanning_alert_locations_tool(
-        config: Config, context_repo: Optional[str],
-        context_alert_id: Optional[str]) -> Tool:
+        config: Config, context_repo: str | None,
+        context_alert_id: str | None) -> Tool:
 	"""Define a tool that fetches secret scanning alert locations via GitHub API."""
 
 	def handler(invocation: ToolInvocation) -> ToolResult:
-		params: Dict[str, Any] = invocation.get("arguments") or {}
+		params: dict[str, Any] = invocation.get("arguments") or {}
 		repo = params.get("repo") or context_repo
 		alert_number = params.get("alert_number") or context_alert_id
 		token = config.github_token
@@ -159,6 +160,7 @@ def secret_scanning_alert_locations_tool(
 	)
 
 
+@functools.lru_cache(maxsize=1)
 def _import_registry():
 	"""Import validate_secrets registry module.
 
@@ -203,7 +205,7 @@ def validate_secret_tool(config: Config) -> Tool:
 	"""
 
 	def handler(invocation: ToolInvocation) -> ToolResult:
-		params: Dict[str, Any] = (
+		params: dict[str, Any] = (
 		    invocation.get("arguments") or {}
 		)
 		secret = params.get("secret")
@@ -373,8 +375,8 @@ def list_secret_validators_tool() -> Tool:
 	)
 
 
-def get_session_tools(config: Config, org_repo: Optional[str],
-                      alert_id: Optional[str]) -> List[Tool]:
+def get_session_tools(config: Config, org_repo: str | None,
+                      alert_id: str | None) -> list[Tool]:
 	"""Return tools to register for a session."""
 	return [
 	    secret_scanning_alert_tool(config, org_repo, alert_id),

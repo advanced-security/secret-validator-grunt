@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import List, Optional, Any
+from typing import Any
 
 from pydantic import Field, field_validator
 from pydantic_core.core_schema import ValidationInfo
@@ -22,7 +22,7 @@ class Config(BaseSettings):
 
 	model_config = SettingsConfigDict(env_prefix="", case_sensitive=False)
 
-	cli_url: Optional[str] = Field(
+	cli_url: str | None = Field(
 	    default=None,
 	    alias="COPILOT_CLI_URL",
 	    description=
@@ -48,7 +48,7 @@ class Config(BaseSettings):
 	    alias="JUDGE_TIMEOUT_SECONDS",
 	    description="Judge timeout in seconds",
 	)
-	max_parallel_sessions: Optional[int] = Field(
+	max_parallel_sessions: int | None = Field(
 	    default=None,
 	    alias="MAX_PARALLEL_SESSIONS",
 	    description="Maximum parallel sessions (default=analysis_count)",
@@ -56,17 +56,17 @@ class Config(BaseSettings):
 	stream_verbose: bool = Field(False, alias="STREAM_VERBOSE",
 	                             description="Stream deltas to console")
 	agent_file: str = Field(
-	    "src/secret_validator_grunt/agents/secret_validator.agent.md",
+	    "agents/secret_validator.agent.md",
 	    alias="AGENT_FILE",
 	    description="Path to validator agent definition",
 	)
 	judge_agent_file: str = Field(
-	    "src/secret_validator_grunt/agents/judge.agent.md",
+	    "agents/judge.agent.md",
 	    alias="JUDGE_AGENT_FILE",
 	    description="Path to judge agent definition",
 	)
 	report_template_file: str = Field(
-	    "src/secret_validator_grunt/templates/report.md",
+	    "templates/report.md",
 	    alias="REPORT_TEMPLATE_FILE",
 	    description="Default report template path",
 	)
@@ -84,7 +84,7 @@ class Config(BaseSettings):
 	    alias="SHOW_USAGE",
 	    description="Show token/cost usage metrics in TUI and summary",
 	)
-	github_token: Optional[str] = Field(
+	github_token: str | None = Field(
 	    default=None,
 	    alias="GITHUB_TOKEN",
 	    description="GitHub token for secret scanning API access",
@@ -161,6 +161,27 @@ class Config(BaseSettings):
 	def output_path(self) -> Path:
 		"""Return output_dir as Path."""
 		return Path(self.output_dir)
+
+	def apply_overrides(self, run_params: "RunParams") -> None:
+		"""Apply CLI overrides from RunParams onto this config.
+
+		Only non-None fields in run_params are applied, preserving
+		environment-based defaults for anything the user didn't explicitly set.
+
+		Parameters:
+			run_params: Validated run parameters with optional overrides.
+		"""
+		_OVERRIDES: list[tuple[str, str]] = [
+			("analyses", "analysis_count"),
+			("timeout", "analysis_timeout_seconds"),
+			("judge_timeout", "judge_timeout_seconds"),
+			("stream_verbose", "stream_verbose"),
+			("show_usage", "show_usage"),
+		]
+		for param_field, config_field in _OVERRIDES:
+			value = getattr(run_params, param_field)
+			if value is not None:
+				setattr(self, config_field, value)
 
 
 __all__ = ["Config", "load_env"]

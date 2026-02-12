@@ -7,12 +7,13 @@ Provides functions for loading report template content from file paths.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 
-def load_report_template(path: str | Path) -> Optional[str]:
+def load_report_template(path: str | Path) -> str | None:
 	"""
 	Load report template content from a path if it exists.
+
+	Supports absolute, cwd-relative, or package-relative paths.
 
 	Parameters:
 		path: Path to the template file.
@@ -20,7 +21,9 @@ def load_report_template(path: str | Path) -> Optional[str]:
 	Returns:
 		Template content if file exists, None otherwise.
 	"""
-	p = Path(path)
+	from secret_validator_grunt.utils.paths import resolve_asset_path
+
+	p = resolve_asset_path(str(path))
 	if p.exists():
 		return p.read_text(encoding="utf-8")
 	return None

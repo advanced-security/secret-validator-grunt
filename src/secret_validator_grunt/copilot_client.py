@@ -7,7 +7,7 @@ based on runtime configuration (external server mode vs native stdio mode).
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from copilot import CopilotClient
 from secret_validator_grunt.models.config import Config
@@ -23,7 +23,7 @@ def create_client(config: Config) -> CopilotClient:
 		})
 
 	# Native stdio mode
-	opts: Dict[str, Any] = {"log_level": config.log_level}
+	opts: dict[str, Any] = {"log_level": config.log_level}
 	if config.github_token:
 		opts["github_token"] = config.github_token
 	return CopilotClient(opts)

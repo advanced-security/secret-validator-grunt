@@ -1,0 +1,13 @@
+{
+	"verdict": null,
+	"score_range": null,
+	"expect_pass": false,
+	"expected_failures": [
+		"has_required_sections",
+		"valid_verdict",
+		"valid_confidence_score",
+		"confidence_label_matches_score",
+		"metadata_complete",
+		"has_key_finding"
+	]
+}

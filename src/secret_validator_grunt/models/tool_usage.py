@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 
 class ToolCallEvent(BaseModel):
@@ -34,19 +34,19 @@ class ToolCallEvent(BaseModel):
 	    default="success",
 	    description="Outcome: 'success' or 'failure'",
 	)
-	started_at: Optional[str] = Field(
+	started_at: str | None = Field(
 	    default=None,
 	    description="ISO timestamp of call start",
 	)
-	completed_at: Optional[str] = Field(
+	completed_at: str | None = Field(
 	    default=None,
 	    description="ISO timestamp of call completion",
 	)
-	duration_ms: Optional[float] = Field(
+	duration_ms: float | None = Field(
 	    default=None,
 	    description="Duration in milliseconds",
 	)
-	error_message: Optional[str] = Field(
+	error_message: str | None = Field(
 	    default=None,
 	    description="Error details if failed",
 	)
@@ -80,17 +80,15 @@ class ToolUsageStats(BaseModel):
 		tool_calls: List of completed tool call events.
 	"""
 
-	tool_calls: List[ToolCallEvent] = Field(
+	tool_calls: list[ToolCallEvent] = Field(
 	    default_factory=list,
 	    description="Completed tool call events",
 	)
 
 	# Internal pending calls (not serialized)
-	_pending: Dict[str, Dict[str, Any]] = {}
-
-	def model_post_init(self, __context: Any) -> None:
-		"""Initialize internal pending calls dict."""
-		self._pending = {}
+	_pending: dict[str, dict[str, Any]] = PrivateAttr(
+	    default_factory=dict,
+	)
 
 	@property
 	def total_calls(self) -> int:
@@ -124,14 +122,14 @@ class ToolUsageStats(BaseModel):
 			return 100.0
 		return (self.successful_calls / len(self.tool_calls)) * 100
 
-	def calls_by_tool(self) -> Dict[str, ToolCallSummary]:
+	def calls_by_tool(self) -> dict[str, ToolCallSummary]:
 		"""
 		Aggregate call counts per tool name.
 
 		Returns:
 			Dict mapping tool names to ToolCallSummary objects.
 		"""
-		result: Dict[str, ToolCallSummary] = {}
+		result: dict[str, ToolCallSummary] = {}
 		for call in self.tool_calls:
 			if call.tool_name not in result:
 				result[call.tool_name] = ToolCallSummary(
@@ -145,7 +143,7 @@ class ToolUsageStats(BaseModel):
 				summary.failed += 1
 		return result
 
-	def top_tools(self, limit: int = 5) -> List[ToolCallSummary]:
+	def top_tools(self, limit: int = 5) -> list[ToolCallSummary]:
 		"""
 		Return the most-called tools sorted by total calls.
 
@@ -185,7 +183,7 @@ class ToolUsageStats(BaseModel):
 	    self,
 	    tool_call_id: str,
 	    success: bool,
-	    error: Optional[str] = None,
+	    error: str | None = None,
 	) -> None:
 		"""
 		Record the completion of a tool call.

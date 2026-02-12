@@ -7,12 +7,12 @@ markdown files, used by agent loader and skill manifest modules.
 
 from __future__ import annotations
 
-from typing import Any, Tuple
+from typing import Any
 
 import yaml
 
 
-def split_frontmatter(text: str) -> Tuple[dict[str, Any], str]:
+def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
 	"""
 	Split YAML frontmatter from markdown body.
 

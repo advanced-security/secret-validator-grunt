@@ -53,7 +53,8 @@ The agent's raw markdown output is parsed into a `Report` model that extracts th
 5. **Session**: Copilot SDK session created with custom tools, skill directories, and agent config
 6. **Analysis**: Agent streams events; `StreamCollector` captures them; raw markdown parsed into `Report`
 7. **Judging**: All reports + methodology compliance summaries sent to judge agent
-8. **Output**: Winner report saved to `analysis/<org>/<repo>/<alert_id>/final-report.md`
+8. **Evaluation**: Reports can be run through deterministic eval checks (`evals/`) to validate structural and semantic quality
+9. **Output**: Winner report saved to `analysis/<org>/<repo>/<alert_id>/final-report.md`
 
 ## Connection Modes
 
@@ -89,3 +90,4 @@ analysis/
 - **Optional fields for extensibility**: New tracking fields (skill_usage, tool_usage) are `Optional` to maintain backward compatibility
 - **`--show-usage` gating**: Enhanced diagnostics (tool tracking, diagnostics.json, TUI tables) are gated behind a CLI flag to keep the default path lightweight
 - **Skills as Copilot SDK skill directories**: Skills are registered as `skill_directories` in the session config, making them available via the SDK's built-in `skill` tool rather than implementing custom loading
+- **Deterministic evals**: Report quality checks (`evals/`) are pure functions that validate structure, metadata, verdict coherence, and evidence quality without LLM involvement — enabling fast, repeatable quality gates

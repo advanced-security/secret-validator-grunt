@@ -7,7 +7,6 @@ the output of a single agent analysis session.
 
 from __future__ import annotations
 
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from .report import Report
@@ -25,14 +24,14 @@ class AgentRunResult(BaseModel):
 	"""
 
 	run_id: str
-	workspace: Optional[str] = None
-	report: Optional[Report] = None
-	raw_markdown: Optional[str] = None
-	progress_log: List[str] = Field(default_factory=list)
-	error: Optional[str] = None
-	usage: Optional[UsageStats] = None
-	skill_usage: Optional[SkillUsageStats] = None
-	tool_usage: Optional[ToolUsageStats] = None
+	workspace: str | None = None
+	report: Report | None = None
+	raw_markdown: str | None = None
+	progress_log: list[str] = Field(default_factory=list)
+	error: str | None = None
+	usage: UsageStats | None = None
+	skill_usage: SkillUsageStats | None = None
+	tool_usage: ToolUsageStats | None = None
 
 
 __all__ = ["AgentRunResult"]

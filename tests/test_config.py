@@ -84,3 +84,50 @@ def test_validate_secret_timeout_rejects_zero():
 	"""validate_secret_timeout_seconds must be > 0."""
 	with pytest.raises(ValueError):
 		Config(VALIDATE_SECRET_TIMEOUT_SECONDS=0)
+
+
+# ── apply_overrides ──────────────────────────────────────────────────
+
+
+def test_apply_overrides_all_fields():
+	"""apply_overrides sets every overridable field from RunParams."""
+	from secret_validator_grunt.models.run_params import RunParams
+
+	cfg = Config()
+	rp = RunParams(
+		org_repo="o/r",
+		alert_id="1",
+		analyses=7,
+		timeout=999,
+		judge_timeout=42,
+		stream_verbose=True,
+		show_usage=True,
+	)
+	cfg.apply_overrides(rp)
+	assert cfg.analysis_count == 7
+	assert cfg.analysis_timeout_seconds == 999
+	assert cfg.judge_timeout_seconds == 42
+	assert cfg.stream_verbose is True
+	assert cfg.show_usage is True
+
+
+def test_apply_overrides_none_preserves_defaults():
+	"""apply_overrides skips None fields, keeping env/default values."""
+	from secret_validator_grunt.models.run_params import RunParams
+
+	cfg = Config(ANALYSIS_COUNT=5)
+	rp = RunParams(org_repo="o/r", alert_id="1")  # all overrides None
+	cfg.apply_overrides(rp)
+	assert cfg.analysis_count == 5  # unchanged
+	assert cfg.analysis_timeout_seconds == 1800  # default preserved
+
+
+def test_apply_overrides_partial():
+	"""apply_overrides handles a mix of set and None fields."""
+	from secret_validator_grunt.models.run_params import RunParams
+
+	cfg = Config()
+	rp = RunParams(org_repo="o/r", alert_id="1", analyses=10)
+	cfg.apply_overrides(rp)
+	assert cfg.analysis_count == 10
+	assert cfg.stream_verbose is False  # default preserved

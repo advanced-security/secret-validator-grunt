@@ -9,7 +9,7 @@ and the complete manifest of available skills.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -32,9 +32,9 @@ class SkillInfo(BaseModel):
 	name: str = Field(description="Skill name")
 	description: str = Field(default="", description="Skill description")
 	path: str = Field(description="Absolute path to SKILL.md")
-	phase: Optional[str] = Field(default=None,
+	phase: str | None = Field(default=None,
 	                             description="Phase this skill belongs to")
-	secret_type: Optional[str] = Field(
+	secret_type: str | None = Field(
 	    default=None, description="Secret type this skill applies to")
 	required: bool = Field(default=False,
 	                       description="Whether this skill must be loaded")
@@ -72,8 +72,8 @@ class SkillManifest(BaseModel):
 		generated_at: ISO timestamp of when the manifest was generated.
 	"""
 
-	skills: List[SkillInfo] = Field(default_factory=list)
-	phases: List[str] = Field(default_factory=list)
+	skills: list[SkillInfo] = Field(default_factory=list)
+	phases: list[str] = Field(default_factory=list)
 	generated_at: str = Field(
 	    default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

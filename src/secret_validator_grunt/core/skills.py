@@ -12,7 +12,6 @@ import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Union
 
 from secret_validator_grunt.models.skill import SkillInfo, SkillManifest
 from secret_validator_grunt.loaders.frontmatter import split_frontmatter
@@ -23,7 +22,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_SKILLS_DIRECTORY = Path(__file__).parent.parent / "skills"
 
 
-def _discover_phase_dirs(skills_root: Path) -> List[str]:
+def _discover_phase_dirs(skills_root: Path) -> list[str]:
 	"""
 	Discover phase directories within a skills root.
 
@@ -33,7 +32,7 @@ def _discover_phase_dirs(skills_root: Path) -> List[str]:
 	Returns:
 		List of absolute paths to phase directories.
 	"""
-	dirs: List[str] = []
+	dirs: list[str] = []
 	if skills_root.exists() and skills_root.is_dir():
 		for child in sorted(skills_root.iterdir()):
 			# Include directories that look like phases
@@ -44,7 +43,7 @@ def _discover_phase_dirs(skills_root: Path) -> List[str]:
 
 
 def discover_skill_directories(
-        additional_dirs: Optional[List[str]] = None) -> List[str]:
+        additional_dirs: list[str] | None = None) -> list[str]:
 	"""
 	Discover all skill directories to register with Copilot.
 
@@ -58,7 +57,7 @@ def discover_skill_directories(
 		List of absolute directory paths as strings.
 	"""
 	seen: set[str] = set()
-	dirs: List[str] = []
+	dirs: list[str] = []
 
 	def add_unique(path: str) -> None:
 		if path not in seen:
@@ -97,7 +96,7 @@ def discover_skill_directories(
 
 
 def _infer_phase_from_path(skill_path: Path,
-                           skills_root: Path) -> Optional[str]:
+                           skills_root: Path) -> str | None:
 	"""
 	Infer the phase from the skill's directory path.
 
@@ -118,7 +117,7 @@ def _infer_phase_from_path(skill_path: Path,
 	return None
 
 
-def discover_skills(skills_dir: Path) -> List[SkillInfo]:
+def discover_skills(skills_dir: Path) -> list[SkillInfo]:
 	"""
 	Discover all skills in a directory tree.
 
@@ -130,7 +129,7 @@ def discover_skills(skills_dir: Path) -> List[SkillInfo]:
 	Returns:
 		List of SkillInfo objects for discovered skills.
 	"""
-	skills: List[SkillInfo] = []
+	skills: list[SkillInfo] = []
 	skills_dir = Path(skills_dir).resolve()
 
 	if not skills_dir.exists():
@@ -171,7 +170,7 @@ def discover_skills(skills_dir: Path) -> List[SkillInfo]:
 
 
 def build_skill_manifest(
-        skills_dirs: Union[List[Path], Path, List[str], str]) -> SkillManifest:
+        skills_dirs: list[Path] | Path | list[str] | str) -> SkillManifest:
 	"""
 	Build a complete skill manifest from one or more skill directories.
 
@@ -186,7 +185,7 @@ def build_skill_manifest(
 	else:
 		skills_dirs = [Path(d) for d in skills_dirs]
 
-	all_skills: List[SkillInfo] = []
+	all_skills: list[SkillInfo] = []
 	for skills_dir in skills_dirs:
 		all_skills.extend(discover_skills(skills_dir))
 
@@ -217,7 +216,7 @@ def _format_phase_header(phase: str) -> str:
 	return phase_display
 
 
-def discover_hidden_skills(skills_dir: Path) -> List[str]:
+def discover_hidden_skills(skills_dir: Path) -> list[str]:
 	"""
 	Discover skills in underscore-prefixed directories.
 
@@ -230,7 +229,7 @@ def discover_hidden_skills(skills_dir: Path) -> List[str]:
 	Returns:
 		List of skill names that should be disabled.
 	"""
-	hidden: List[str] = []
+	hidden: list[str] = []
 	skills_dir = Path(skills_dir).resolve()
 
 	if not skills_dir.exists():

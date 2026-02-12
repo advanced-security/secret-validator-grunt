@@ -14,6 +14,9 @@ src/secret_validator_grunt/
     judge.py               # Judge session: run_judge()
     skills.py              # Skill discovery, manifest building, formatting
 
+  evals/                   # Report evaluation framework
+    checks.py              # Deterministic check functions + orchestrator
+
   models/                  # Pydantic data models (one class per file)
     config.py              # Config (BaseSettings) — env-driven configuration
     agent_config.py        # AgentConfig — parsed from agent .md frontmatter
@@ -27,6 +30,7 @@ src/secret_validator_grunt/
     skill_usage.py         # SkillUsageStats — skill load tracking + compliance
     tool_usage.py          # ToolUsageStats — tool call tracking + success rates
     usage.py               # UsageStats — token/cost/duration tracking
+    eval_result.py         # EvalCheck, EvalResult — eval framework models
 
   ui/                      # Presentation layer
     tui.py                 # Rich-based TUI with Live display
@@ -113,3 +117,21 @@ All data structures are Pydantic models with `Field` descriptions. Key patterns:
 - Optional fields for backward compatibility
 - `from __future__ import annotations` in all files
 - `__all__` exports in every module
+- Use built-in generics (`list`, `dict`, `tuple`) and `X | None` instead of `typing.List`, `Optional[X]`
+
+### `evals/checks.py` — Report Evaluation Engine
+
+Deterministic evaluation checks that validate the structural and semantic quality of agent-generated reports. Each check is a pure function `(Report) -> EvalCheck` that examines one aspect of report quality.
+
+**Checks implemented (9 total):**
+1. `has_required_sections` — All 9 required section headings present (error)
+2. `valid_verdict` — Verdict is one of: TRUE_POSITIVE, FALSE_POSITIVE, SUSPICIOUS, INCONCLUSIVE (error)
+3. `valid_confidence_score` — Score is a number in [0, 10] (error)
+4. `confidence_label_matches_score` — Label (High/Medium/Low) matches the score via `_score_to_label()` (error)
+5. `metadata_complete` — repository, alert_id, secret_type, report_date are populated (error)
+6. `has_key_finding` — Key finding is non-empty (error)
+7. `has_verification_tests` — Verification testing content present (warning)
+8. `has_code_evidence` — File paths or code blocks in markdown (warning)
+9. `verdict_confidence_coherent` — INCONCLUSIVE + high confidence is incoherent (error)
+
+`run_all_checks()` orchestrates all checks and returns an `EvalResult`. The `EvalResult.passed` property ignores warning-severity failures — only errors determine pass/fail.

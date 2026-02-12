@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from typing import Optional
 
 import typer
 from typer.main import get_command
@@ -29,11 +28,11 @@ def root() -> None:
 def run_impl(
     org_repo: str,
     alert_id: str,
-    analyses: Optional[int] = None,
-    timeout: Optional[int] = None,
-    judge_timeout: Optional[int] = None,
-    stream_verbose: Optional[bool] = None,
-    show_usage: Optional[bool] = None,
+    analyses: int | None = None,
+    timeout: int | None = None,
+    judge_timeout: int | None = None,
+    stream_verbose: bool | None = None,
+    show_usage: bool | None = None,
 ) -> None:
 	"""
 	Run N parallel analyses and judge to select the best report.
@@ -63,16 +62,7 @@ def run_impl(
 	    show_usage=show_usage,
 	)
 	config = Config()
-	if params.analyses is not None:
-		config.analysis_count = params.analyses
-	if params.timeout is not None:
-		config.analysis_timeout_seconds = params.timeout
-	if params.judge_timeout is not None:
-		config.judge_timeout_seconds = params.judge_timeout
-	if params.stream_verbose is not None:
-		config.stream_verbose = params.stream_verbose
-	if params.show_usage is not None:
-		config.show_usage = params.show_usage
+	config.apply_overrides(params)
 	typer.echo(
 	    f"Running with model={config.model}, analyses={config.analysis_count}, "
 	    f"repo={org_repo}, alert={alert_id}, "
@@ -98,24 +88,24 @@ def run_impl(
 		    ))
 		# Update TUI with outcome data from analysis results
 		for res in outcome.analysis_results:
-			report = getattr(res, "report", None)
+			report = res.report
 			if report:
 				ui.update_outcome(
 				    str(res.run_id),
-				    verdict=getattr(report, "verdict", None),
+				    verdict=report.verdict,
 				    confidence=
 				    (f"{report.confidence_score}/10 ({report.confidence_label})"
-				     if getattr(report, "confidence_score", None) else None),
-				    risk_level=getattr(report, "risk_level", None),
-				    key_finding=getattr(report, "key_finding", None),
+				     if report.confidence_score else None),
+				    risk_level=report.risk_level,
+				    key_finding=report.key_finding,
 				)
 		# Update judge outcome
 		if outcome.judge_result:
 			jr = outcome.judge_result
 			ui.update_outcome(
 			    "judge",
-			    verdict=getattr(jr, "verdict", None),
-			    key_finding=getattr(jr, "rationale", None),
+			    verdict=jr.verdict,
+			    key_finding=jr.rationale,
 			)
 		ui.print_summary(
 		    outcome.judge_result.winner_index,

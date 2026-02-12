@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Any
+from typing import Any, Callable
 
 from copilot.generated.session_events import SessionEventType
 
 from secret_validator_grunt.models.skill import SkillManifest
+from secret_validator_grunt.utils.logging import get_logger
 from secret_validator_grunt.models.skill_usage import (
     SkillLoadStatus,
     SkillUsageStats,
@@ -23,6 +24,8 @@ from secret_validator_grunt.models.skill_usage import (
 from secret_validator_grunt.models.tool_usage import ToolUsageStats
 
 ProgressCallback = Callable[[str, str], None]
+
+logger = get_logger(__name__)
 
 
 class StreamCollector:
@@ -33,10 +36,10 @@ class StreamCollector:
 	    run_id: str,
 	    stream_log_path: Path,
 	    stream_verbose: bool = False,
-	    progress_cb: Optional[ProgressCallback] = None,
+	    progress_cb: ProgressCallback | None = None,
 	    show_usage: bool = False,
-	    skill_manifest: Optional[SkillManifest] = None,
-	    disabled_skills: Optional[List[str]] = None,
+	    skill_manifest: SkillManifest | None = None,
+	    disabled_skills: list[str] | None = None,
 	) -> None:
 		"""
 		Initialize the stream collector.
@@ -54,7 +57,7 @@ class StreamCollector:
 		self.stream_log_path = stream_log_path
 		self.stream_verbose = stream_verbose
 		self.progress_cb = progress_cb
-		self.chunks: List[str] = []
+		self.chunks: list[str] = []
 		self.show_usage = show_usage
 		from secret_validator_grunt.models import UsageStats
 
@@ -64,11 +67,11 @@ class StreamCollector:
 		self._skill_manifest = skill_manifest
 		self._disabled_skills = set(disabled_skills or [])
 		# Track pending skill tool calls by toolCallId -> {skill_name, start_time}
-		self._pending_skill_calls: Dict[str, Dict[str, Any]] = {}
+		self._pending_skill_calls: dict[str, dict[str, Any]] = {}
 		self._skill_usage = self._init_skill_usage()
 
 		# Tool usage tracking (all tools, not just skills)
-		self._tool_usage: Optional[ToolUsageStats] = (
+		self._tool_usage: ToolUsageStats | None = (
 		    ToolUsageStats() if show_usage else None
 		)
 
@@ -118,7 +121,7 @@ class StreamCollector:
 		return self._skill_usage
 
 	@property
-	def tool_usage(self) -> Optional[ToolUsageStats]:
+	def tool_usage(self) -> ToolUsageStats | None:
 		"""Return the tool usage statistics, or None if not tracking."""
 		return self._tool_usage
 
@@ -212,7 +215,7 @@ class StreamCollector:
 				fp.write(msg)
 		except Exception:
 			# avoid crashing on log write errors
-			pass
+			logger.debug("failed to write stream log", exc_info=True)
 
 	def handler(self, event: Any) -> None:
 		"""Handle a session event."""
@@ -311,7 +314,7 @@ class StreamCollector:
 		return "".join(self.chunks)
 
 
-async def fetch_last_assistant_message(session: Any) -> Optional[str]:
+async def fetch_last_assistant_message(session: Any) -> str | None:
 	"""
 	Fallback to retrieve the last assistant message from session messages.
 

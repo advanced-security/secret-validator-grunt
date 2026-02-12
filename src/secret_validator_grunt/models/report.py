@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, List, Any
+from typing import Any
 from pydantic import BaseModel, Field
 import re
 
@@ -25,42 +25,42 @@ class ReportScore(BaseModel):
 
 	factor: str = Field(description="Scoring factor")
 	score: float = Field(description="Score value")
-	rationale: Optional[str] = Field(default=None,
+	rationale: str | None = Field(default=None,
 	                                 description="Score rationale")
 
 
 class Report(BaseModel):
 	"""Structured representation of a secret validation report."""
 
-	alert_id: Optional[str] = None
-	repository: Optional[str] = None
-	secret_type: Optional[str] = None
-	verdict: Optional[str] = None
-	confidence_score: Optional[float] = None
-	confidence_label: Optional[str] = None
-	risk_level: Optional[str] = None
-	status: Optional[str] = None
-	analyst: Optional[str] = None
-	report_date: Optional[str] = None
-	key_finding: Optional[str] = None
+	alert_id: str | None = None
+	repository: str | None = None
+	secret_type: str | None = None
+	verdict: str | None = None
+	confidence_score: float | None = None
+	confidence_label: str | None = None
+	risk_level: str | None = None
+	status: str | None = None
+	analyst: str | None = None
+	report_date: str | None = None
+	key_finding: str | None = None
 
 	# Raw markdown representation
-	raw_markdown: Optional[str] = None
+	raw_markdown: str | None = None
 
 	# Optional detail sections
-	locations: Optional[str] = None
-	locations_table: Optional[List[dict]] = None
-	context: Optional[str] = None
-	verification_testing: Optional[str] = None
-	verification_tests: Optional[List[dict]] = None
-	documentary_evidence: Optional[str] = None
-	evidence_analysis: Optional[str] = None
-	evidence_analysis_table: Optional[List[dict]] = None
-	confidence_scoring: Optional[List[ReportScore]] = None
-	confidence_scoring_table: Optional[List[dict]] = None
-	risk_assessment: Optional[str] = None
-	risk_assessment_table: Optional[List[dict]] = None
-	verdict_details: Optional[str] = None
+	locations: str | None = None
+	locations_table: list[dict] | None = None
+	context: str | None = None
+	verification_testing: str | None = None
+	verification_tests: list[dict] | None = None
+	documentary_evidence: str | None = None
+	evidence_analysis: str | None = None
+	evidence_analysis_table: list[dict] | None = None
+	confidence_scoring: list[ReportScore] | None = None
+	confidence_scoring_table: list[dict] | None = None
+	risk_assessment: str | None = None
+	risk_assessment_table: list[dict] | None = None
+	verdict_details: str | None = None
 
 	@classmethod
 	def from_markdown(cls, md: str) -> "Report":

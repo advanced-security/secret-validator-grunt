@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -34,8 +33,8 @@ class AgentRunProgress(BaseModel):
 
 	run_id: str
 	status: RunStatus = RunStatus.PENDING
-	last_event: Optional[str] = None
-	messages: List[str] = Field(default_factory=list)
+	last_event: str | None = None
+	messages: list[str] = Field(default_factory=list)
 	started_at: datetime = Field(
 	    default_factory=lambda: datetime.now(timezone.utc))
 	updated_at: datetime = Field(

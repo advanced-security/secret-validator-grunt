@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from typing import List
 
 
-def _run(args: List[str]) -> int:
+def _run(args: list[str]) -> int:
 	"""
 	Execute yapf with the provided arguments.
 

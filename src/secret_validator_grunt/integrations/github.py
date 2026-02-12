@@ -7,7 +7,7 @@ to fetch alert details and locations.
 
 from __future__ import annotations
 
-from typing import Any, List
+from typing import Any
 
 from ghapi.core import GhApi
 from ghapi.page import paged
@@ -49,7 +49,7 @@ def get_alert(api: GhApi, owner: str, repo: str, alert_number: int) -> Any:
 
 def list_alert_locations(api: GhApi, owner: str, repo: str, alert_number: int,
                          per_page: int = 100,
-                         max_pages: int = 50) -> List[Any]:
+                         max_pages: int = 50) -> list[Any]:
 	"""List all locations for a secret scanning alert (paginated)."""
 	try:
 		if hasattr(api, "secret_scanning") and hasattr(

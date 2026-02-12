@@ -8,7 +8,6 @@ with YAML frontmatter containing agent metadata and prompts.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 import re
 
 from secret_validator_grunt.models.agent_config import AgentConfig
@@ -17,7 +16,7 @@ from secret_validator_grunt.loaders.frontmatter import split_frontmatter
 CODE_FENCE_RE = re.compile(r"```(?:markdown)?\s*(.*?)```", re.S)
 
 
-def _extract_report_template(body: str) -> Optional[str]:
+def _extract_report_template(body: str) -> str | None:
 	"""
 	Extract the report template from a fenced markdown block.
 
@@ -46,12 +45,15 @@ def load_agent(path: str | Path) -> AgentConfig:
 	Load an agent definition from a markdown file with frontmatter.
 
 	Parameters:
-		path: Path to the agent markdown file.
+		path: Path to the agent markdown file. Supports absolute,
+			cwd-relative, or package-relative paths.
 
 	Returns:
 		AgentConfig with parsed metadata and prompt body.
 	"""
-	path = Path(path)
+	from secret_validator_grunt.utils.paths import resolve_asset_path
+
+	path = resolve_asset_path(str(path))
 	raw = path.read_text(encoding="utf-8")
 	meta, body = split_frontmatter(raw)
 

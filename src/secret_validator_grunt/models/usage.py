@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
+from collections.abc import Iterable
+
 from pydantic import BaseModel, Field, ConfigDict
 from copilot.generated.session_events import QuotaSnapshot
 
@@ -20,13 +21,13 @@ class UsageStats(BaseModel):
 	                                  description="Total cache write tokens")
 	cost: float = Field(0, description="Accumulated cost")
 	duration: float = Field(0, description="Accumulated duration in seconds")
-	current_tokens: Optional[float] = Field(
+	current_tokens: float | None = Field(
 	    default=None, description="Current tokens in session context")
-	token_limit: Optional[float] = Field(default=None,
+	token_limit: float | None = Field(default=None,
 	                                     description="Session token limit")
-	quota_snapshots_start: Optional[Dict[str, QuotaSnapshot]] = Field(
+	quota_snapshots_start: dict[str, QuotaSnapshot] | None = Field(
 	    default=None, description="Initial quota snapshots")
-	quota_snapshots_end: Optional[Dict[str, QuotaSnapshot]] = Field(
+	quota_snapshots_end: dict[str, QuotaSnapshot] | None = Field(
 	    default=None, description="Final quota snapshots")
 
 	@property
@@ -35,11 +36,11 @@ class UsageStats(BaseModel):
 		return (self.input_tokens + self.output_tokens +
 		        self.cache_read_tokens + self.cache_write_tokens)
 
-	def requests_consumed(self) -> Dict[str, float]:
+	def requests_consumed(self) -> dict[str, float]:
 		"""Compute per-quota used requests delta if snapshots are available."""
 		if not self.quota_snapshots_end:
 			return {}
-		res: Dict[str, float] = {}
+		res: dict[str, float] = {}
 		for key, end in self.quota_snapshots_end.items():
 			start = None
 			if self.quota_snapshots_start:
@@ -60,9 +61,9 @@ class UsageStats(BaseModel):
 		self.duration += duration or 0
 
 	def update_snapshot(
-	        self, *, current_tokens: Optional[float],
-	        token_limit: Optional[float],
-	        quota_snapshots: Optional[Dict[str, QuotaSnapshot]]) -> None:
+	        self, *, current_tokens: float | None,
+	        token_limit: float | None,
+	        quota_snapshots: dict[str, QuotaSnapshot] | None) -> None:
 		"""Update snapshot state and preserve first/last quota snapshots."""
 		if current_tokens is not None:
 			self.current_tokens = current_tokens
@@ -72,9 +73,6 @@ class UsageStats(BaseModel):
 			if self.quota_snapshots_start is None:
 				self.quota_snapshots_start = quota_snapshots
 			self.quota_snapshots_end = quota_snapshots
-
-
-from typing import Iterable
 
 
 def aggregate(usages: Iterable[UsageStats]) -> UsageStats:

@@ -2,12 +2,40 @@
 Path safety utilities.
 
 Provides functions for ensuring paths stay within allowed directories
-to prevent path traversal attacks.
+to prevent path traversal attacks, and for resolving package-relative
+asset paths.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+
+
+# Root of the secret_validator_grunt package directory.
+PACKAGE_DIR: Path = Path(__file__).resolve().parent.parent
+
+
+def resolve_asset_path(relative_path: str) -> Path:
+	"""Resolve a path that may be relative to the package directory.
+
+	Resolution order:
+	1. If the path exists as-is (absolute or cwd-relative), return it.
+	2. Otherwise, resolve against the package directory.
+
+	This allows pip-installed packages to locate bundled assets
+	(agents, templates, prompts) without hardcoding repo-root paths.
+
+	Parameters:
+		relative_path: Path string (may be absolute, cwd-relative, or
+			package-relative like ``agents/secret_validator.agent.md``).
+
+	Returns:
+		Resolved Path to the asset.
+	"""
+	p = Path(relative_path)
+	if p.exists():
+		return p
+	return PACKAGE_DIR / relative_path
 
 
 def ensure_within(base: Path, path: Path) -> Path:
@@ -37,4 +65,4 @@ def ensure_within(base: Path, path: Path) -> Path:
 	raise ValueError(f"Path {resolved_path} escapes base {resolved_base}")
 
 
-__all__ = ["ensure_within"]
+__all__ = ["ensure_within", "resolve_asset_path", "PACKAGE_DIR"]

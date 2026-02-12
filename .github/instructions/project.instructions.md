@@ -26,6 +26,7 @@ Key data flow: `CLI → Config → runner.run_all → analysis × N + judge → 
 ```
 src/secret_validator_grunt/
   core/        # Orchestration: runner, analysis, judge, skills
+  evals/       # Deterministic report evaluation checks
   integrations/# External tools: copilot_tools, custom_agents, github
   loaders/     # File loaders: agents, prompts, templates, frontmatter
   models/      # Pydantic models, one class per file
@@ -89,7 +90,7 @@ The post-implementation review step has caught real bugs:
 - **Inline dummy objects** preferred over complex mock hierarchies
 - Use `tmp_path` fixture for file system tests
 - Config in tests: always use alias names (see Config Gotcha above)
-- Current baseline: **139 tests**
+- Current baseline: **214 tests**
 
 ## Skills System
 
@@ -114,7 +115,8 @@ To add a new skill: create `skills/<phase>/<name>/SKILL.md` with frontmatter and
 3. Does it touch streaming? → Update `StreamCollector` handler in `ui/streaming.py`
 4. Does it need TUI output? → Add a render method in `ui/tui.py`, gate behind the appropriate flag
 5. Does it persist data? → Write to the per-run workspace dir (see `utils/paths.py:ensure_within`)
-6. Write tests as you go, not after
+6. Does it touch report format? → Update eval fixtures (see Eval System below)
+7. Write tests as you go, not after
 
 ## What Works Well (Lessons Learned)
 
@@ -125,6 +127,37 @@ To add a new skill: create `skills/<phase>/<name>/SKILL.md` with frontmatter and
 - **Phase-based skill organization** made skill discovery intuitive for agents
 - **Post-implementation first-principles review** catches bugs that unit tests miss
 
+## Eval System
+
+The `evals/` module provides deterministic checks that validate the structural and semantic quality of agent-generated reports. Checks are pure functions `(Report) -> EvalCheck`, composed via `run_all_checks()`.
+
+### Eval Fixture Maintenance
+
+Eval tests run against sample report fixtures in `tests/fixtures/reports/`. Each fixture is a pair:
+- `<name>.md` — a real or synthetic report markdown
+- `<name>.json` — expected metadata (verdict, score range, expected failures)
+
+**If you change the report template (`templates/`) or the `Report.from_markdown()` parser, you MUST update the eval fixtures to match.** Fixtures prefixed with `bad-` are intentionally malformed. All other fixtures are expected to pass all error-severity checks.
+
+To add a new fixture: create both the `.md` and `.json` files. It is automatically discovered by parameterized tests — no code changes needed.
+
+### Adding a New Eval Check
+
+1. Write the check function in `evals/checks.py`: `(Report) -> EvalCheck`
+2. Add it to the `ALL_CHECKS` list (order does not matter)
+3. Export it from `evals/__init__.py`
+4. Add a test class in `tests/test_evals.py`
+5. Verify existing fixtures still pass — new checks may need fixture updates
+
+### Confidence Label Boundaries
+
+Label boundaries are defined in `_score_to_label()` with exclusive upper bounds for lower tiers:
+- **High:** score >= 7.0
+- **Medium:** 4.0 <= score < 7.0
+- **Low:** score < 4.0
+
+Do NOT use overlapping ranges or dict-based lookups for boundaries — use explicit `if/elif` chains to avoid ordering ambiguity.
+
 ## What to Avoid
 
 - Do NOT mutate third-party module namespaces (monkey-patching attributes onto imported modules)
@@ -133,6 +166,9 @@ To add a new skill: create `skills/<phase>/<name>/SKILL.md` with frontmatter and
 - Do NOT add code to `services/` — it was removed during refactoring
 - Do NOT skip the test-after-each-phase step. This is how regressions are caught early.
 - Do NOT use `dataclass` for new models — use Pydantic `BaseModel` exclusively
+- Do NOT use `typing.List`, `typing.Dict`, `typing.Tuple` etc. when `from __future__ import annotations` is present — use built-in generics (`list`, `dict`, `tuple`) and `X | None` instead of `Optional[X]`
+- Do NOT use overlapping numeric ranges in dicts for boundary logic — use explicit `if/elif` chains
+- Do NOT use unanchored regex for file path detection that matches bare numbers (e.g. `6.7`) — require alphabetic lead-in or backtick quoting
 
 ## Key Dependencies
 
@@ -153,10 +189,12 @@ To add a new skill: create `skills/<phase>/<name>/SKILL.md` with frontmatter and
 | `COPILOT_CLI_URL` | None | External Copilot CLI server URL |
 | `COPILOT_MODEL` | Claude Sonnet 4.5 | Model for analysis sessions |
 | `ANALYSIS_COUNT` | 3 | Parallel analysis count |
-| `ANALYSIS_TIMEOUT` | 300 | Per-analysis timeout (seconds) |
-| `JUDGE_TIMEOUT` | 120 | Judge session timeout (seconds) |
+| `ANALYSIS_TIMEOUT_SECONDS` | 1800 | Per-analysis timeout (seconds) |
+| `JUDGE_TIMEOUT_SECONDS` | 300 | Judge session timeout (seconds) |
 | `SHOW_USAGE` | false | Enable diagnostics display and persistence |
 | `GITHUB_TOKEN` | None | GitHub API authentication |
+| `STREAM_VERBOSE` | false | Stream raw deltas to console |
+| `OUTPUT_DIR` | analysis | Base output directory |
 
 ## Reference
 

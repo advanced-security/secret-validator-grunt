@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -43,13 +42,13 @@ class SkillLoadEvent(BaseModel):
 	    default_factory=lambda: datetime.now(timezone.utc).isoformat(),
 	    description="ISO timestamp of completion",
 	)
-	phase: Optional[str] = Field(default=None,
+	phase: str | None = Field(default=None,
 	                             description="Skill phase if known")
 	is_required: bool = Field(default=False,
 	                          description="Whether skill is required")
-	error_message: Optional[str] = Field(default=None,
+	error_message: str | None = Field(default=None,
 	                                     description="Error if failed")
-	duration_ms: Optional[float] = Field(default=None,
+	duration_ms: float | None = Field(default=None,
 	                                     description="Load duration in ms")
 
 
@@ -70,35 +69,35 @@ class SkillUsageStats(BaseModel):
 		load_events: Detailed log of all load attempts.
 	"""
 
-	available_skills: List[str] = Field(
+	available_skills: list[str] = Field(
 	    default_factory=list,
 	    description="Skills available in manifest",
 	)
-	required_skills: List[str] = Field(
+	required_skills: list[str] = Field(
 	    default_factory=list,
 	    description="Skills marked as required",
 	)
-	disabled_skills: List[str] = Field(
+	disabled_skills: list[str] = Field(
 	    default_factory=list,
 	    description="Skills that were disabled",
 	)
-	loaded_skills: List[str] = Field(
+	loaded_skills: list[str] = Field(
 	    default_factory=list,
 	    description="Skills successfully loaded",
 	)
-	failed_skills: List[str] = Field(
+	failed_skills: list[str] = Field(
 	    default_factory=list,
 	    description="Skills that failed to load",
 	)
-	skipped_required: List[str] = Field(
+	skipped_required: list[str] = Field(
 	    default_factory=list,
 	    description="Required skills not loaded",
 	)
-	load_events: List[SkillLoadEvent] = Field(
+	load_events: list[SkillLoadEvent] = Field(
 	    default_factory=list,
 	    description="Detailed log of all load attempts",
 	)
-	phase_map: Dict[str, str] = Field(
+	phase_map: dict[str, str] = Field(
 	    default_factory=dict,
 	    description="Mapping of skill_name to phase from manifest",
 	)
@@ -116,7 +115,7 @@ class SkillUsageStats(BaseModel):
 		loaded_required = set(self.loaded_skills) & set(self.required_skills)
 		return (len(loaded_required) / len(self.required_skills)) * 100
 
-	def loaded_by_phase(self) -> Dict[str, List[str]]:
+	def loaded_by_phase(self) -> dict[str, list[str]]:
 		"""
 		Return loaded skills grouped by phase.
 
@@ -125,7 +124,7 @@ class SkillUsageStats(BaseModel):
 		Returns:
 			Mapping of phase name to list of loaded skill names.
 		"""
-		result: Dict[str, List[str]] = {}
+		result: dict[str, list[str]] = {}
 		for event in self.load_events:
 			if event.status == SkillLoadStatus.LOADED and event.phase:
 				result.setdefault(event.phase, []).append(
@@ -133,7 +132,7 @@ class SkillUsageStats(BaseModel):
 				)
 		return result
 
-	def available_by_phase(self) -> Dict[str, List[str]]:
+	def available_by_phase(self) -> dict[str, list[str]]:
 		"""
 		Return available skills grouped by phase.
 
@@ -142,7 +141,7 @@ class SkillUsageStats(BaseModel):
 		Returns:
 			Mapping of phase name to list of available skill names.
 		"""
-		result: Dict[str, List[str]] = {}
+		result: dict[str, list[str]] = {}
 		for skill_name in self.available_skills:
 			phase = self.phase_map.get(skill_name)
 			if phase:
@@ -154,10 +153,10 @@ class SkillUsageStats(BaseModel):
 	    skill_name: str,
 	    status: SkillLoadStatus,
 	    *,
-	    phase: Optional[str] = None,
+	    phase: str | None = None,
 	    is_required: bool = False,
-	    error_message: Optional[str] = None,
-	    duration_ms: Optional[float] = None,
+	    error_message: str | None = None,
+	    duration_ms: float | None = None,
 	) -> None:
 		"""
 		Record a skill load event and update aggregated lists.

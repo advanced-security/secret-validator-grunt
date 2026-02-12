@@ -1,0 +1,7 @@
+{
+	"verdict": "FALSE_POSITIVE",
+	"score_range": [5.0, 8.0],
+	"secret_type": "http_basic_authentication_header",
+	"repository": "theztefan-enterprise-test/automatic-rotary-phone",
+	"alert_id": "1"
+}

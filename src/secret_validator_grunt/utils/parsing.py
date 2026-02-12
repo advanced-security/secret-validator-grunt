@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Optional, Dict, List
+from typing import Any
 
 CODE_FENCE_RE = re.compile(r"```json\s*(.*?)```", re.S)
 ANY_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)
@@ -35,7 +35,7 @@ def strip_code_fences(text: str) -> str:
 	return text
 
 
-def _extract_last_fenced_json(text: str) -> Optional[str]:
+def _extract_last_fenced_json(text: str) -> str | None:
 	"""Return the last fenced block (json preferred) if any."""
 	matches = list(ANY_FENCE_RE.finditer(text))
 	if not matches:
@@ -43,7 +43,7 @@ def _extract_last_fenced_json(text: str) -> Optional[str]:
 	return matches[-1].group(1).strip()
 
 
-def _extract_balanced_json(text: str) -> Optional[str]:
+def _extract_balanced_json(text: str) -> str | None:
 	"""Heuristic: extract minimal balanced JSON object from text."""
 	stack = 0
 	start = None
@@ -60,7 +60,7 @@ def _extract_balanced_json(text: str) -> Optional[str]:
 	return None
 
 
-def extract_json(text: str) -> Optional[Any]:
+def extract_json(text: str) -> Any | None:
 	"""
 	Extract JSON from fenced block (last) or balanced braces in text.
 
@@ -99,7 +99,7 @@ def normalize_heading(h: str) -> str:
 	return re.sub(r"[^a-z0-9]+", " ", h.lower()).strip()
 
 
-def parse_sections(md: str) -> Dict[str, str]:
+def parse_sections(md: str) -> dict[str, str]:
 	"""
 	Parse markdown into sections keyed by heading text.
 
@@ -109,7 +109,7 @@ def parse_sections(md: str) -> Dict[str, str]:
 	Returns:
 		Dictionary mapping heading text to section body.
 	"""
-	sections: Dict[str, str] = {}
+	sections: dict[str, str] = {}
 	matches = list(HEADING_RE.finditer(md))
 	for i, m in enumerate(matches):
 		heading = m.group(2).strip()
@@ -120,7 +120,7 @@ def parse_sections(md: str) -> Dict[str, str]:
 	return sections
 
 
-def extract_section(md: str, heading: str) -> Optional[str]:
+def extract_section(md: str, heading: str) -> str | None:
 	"""
 	Find a section whose normalized heading starts with the target.
 
@@ -138,7 +138,7 @@ def extract_section(md: str, heading: str) -> Optional[str]:
 	return None
 
 
-def parse_table(table_md: str) -> List[Dict[str, str]]:
+def parse_table(table_md: str) -> list[dict[str, str]]:
 	"""
 	Parse a markdown table into a list of dict rows.
 
@@ -156,7 +156,7 @@ def parse_table(table_md: str) -> List[Dict[str, str]]:
 	if not TABLE_SEPARATOR_RE.match(sep):
 		return []
 	headers = [h.strip() for h in header.strip("|").split("|")]
-	rows: List[Dict[str, str]] = []
+	rows: list[dict[str, str]] = []
 	for ln in lines[2:]:
 		cells = [c.strip() for c in ln.strip("|").split("|")]
 		if len(cells) != len(headers):
@@ -166,7 +166,7 @@ def parse_table(table_md: str) -> List[Dict[str, str]]:
 
 
 def extract_table_from_section(md: str,
-                               heading: str) -> Optional[List[Dict[str, str]]]:
+                               heading: str) -> list[dict[str, str]] | None:
 	"""
 	Extract the first table found inside a section by heading.
 
@@ -182,7 +182,7 @@ def extract_table_from_section(md: str,
 		return None
 	lines = section.splitlines()
 	# find first table-looking segment
-	buf: List[str] = []
+	buf: list[str] = []
 	collecting = False
 	for ln in lines:
 		if "|" in ln:
@@ -195,7 +195,7 @@ def extract_table_from_section(md: str,
 	return None
 
 
-def extract_bullets(section_md: str) -> List[str]:
+def extract_bullets(section_md: str) -> list[str]:
 	"""
 	Extract bullet list items from a markdown section.
 
