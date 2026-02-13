@@ -43,3 +43,7 @@ Reports by default are saved to `analysis/<org>/<repo>/<alert_id>/`
 uv run pytest          # run tests
 uv run yapf -ir src    # format code
 ```
+
+## License
+
+This project is licensed under the terms of the MIT open source license. Please refer to the[LICENSE](./LICENSE) file for the full terms.
