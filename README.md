@@ -18,7 +18,8 @@ This app addresses the challenge of efficiently triaging and validating secret s
 ## Requirements
 
 - Python 3.11+
-- Copilot CLI
+- [Copilot CLI](https://github.com/github/copilot-cli)
+- [Copilot SDK](https://github.com/github/copilot-sdk)
 - GitHub token
 
 ## Setup
@@ -46,4 +47,4 @@ uv run yapf -ir src    # format code
 
 ## License
 
-This project is licensed under the terms of the MIT open source license. Please refer to the[LICENSE](./LICENSE) file for the full terms.
+This project is licensed under the terms of the MIT open source license. Please refer to the [LICENSE](./LICENSE) file for the full terms.

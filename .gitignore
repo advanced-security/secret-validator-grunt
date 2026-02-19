@@ -231,6 +231,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-.logs/**
+.logs/
 
 .DS_Store

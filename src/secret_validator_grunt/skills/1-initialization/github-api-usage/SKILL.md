@@ -2,6 +2,7 @@
 name: github-api-usage
 description: Effective usage of GitHub API tools for fetching secret scanning alerts and locations.
 phase: 1-initialization
+required: true
 ---
 
 # GitHub API Usage for Secret Validation
@@ -15,7 +16,7 @@ You have access to these custom tools for GitHub Secret Scanning:
 | Tool | Purpose |
 |------|---------|
 | `gh_secret_scanning_alert` | Fetch complete alert details including state, type, validity |
-| `gh_secret_scanning_alert_locations` | Enumerate all locations where the secret was found |
+| `gh_secret_scanning_alert_locations` | Fetch all locations where the secret was found |
 
 ## Workflow
 
@@ -54,7 +55,7 @@ This returns an array of locations with:
 From the alert response, capture:
 
 1. **Secret Type** - Critical for choosing verification approach
-2. **Validity Status** - GitHub's preliminary assessment
+2. **Validity Status** - GitHub's out of the box validity assessment
 3. **Creation Date** - How long the secret has been exposed
 4. **All Locations** - Every place the secret appears
 
