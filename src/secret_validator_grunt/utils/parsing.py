@@ -11,7 +11,7 @@ import json
 import re
 from typing import Any
 
-CODE_FENCE_RE = re.compile(r"```json\s*(.*?)```", re.S)
+JSON_FENCE_RE = re.compile(r"```json\s*(.*?)```", re.S)
 ANY_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)
 JSON_RE = re.compile(r"\{.*\}", re.S)
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$", re.M)
@@ -29,7 +29,7 @@ def strip_code_fences(text: str) -> str:
 	Returns:
 		Content of the first JSON fence, or original text if none found.
 	"""
-	m = CODE_FENCE_RE.search(text)
+	m = JSON_FENCE_RE.search(text)
 	if m:
 		return m.group(1).strip()
 	return text

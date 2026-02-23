@@ -4,6 +4,7 @@ import asyncio
 from secret_validator_grunt.core.analysis import run_analysis
 from secret_validator_grunt.models.agent_config import AgentConfig
 from secret_validator_grunt.models.config import Config
+from secret_validator_grunt.models.run_params import RunParams
 
 
 class DummySession:
@@ -65,8 +66,10 @@ async def test_run_analysis_uses_config_timeout():
 	agent = AgentConfig(name="a", prompt="p")
 	client = DummyClient()
 
-	res = await run_analysis("0", client, cfg, agent, org_repo="org/repo",
-	                         alert_id="1")
+	res = await run_analysis(
+	    "0", client, cfg, agent,
+	    run_params=RunParams(org_repo="org/repo", alert_id="1"),
+	)
 	assert client.session.timeout == 123
 	assert res is not None
 	assert res.raw_markdown is not None

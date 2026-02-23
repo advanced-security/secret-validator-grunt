@@ -21,7 +21,12 @@ from .parsing import (
     normalize_heading,
 )
 from .paths import ensure_within
-from .logging import configure_logging, get_logger
+from .logging import (
+    configure_logging,
+    get_logger,
+    sanitize_text,
+    TokenSanitizingFilter,
+)
 from .protocols import SessionProtocol, CopilotClientProtocol
 
 __all__ = [
@@ -39,6 +44,8 @@ __all__ = [
     # logging
     "configure_logging",
     "get_logger",
+    "sanitize_text",
+    "TokenSanitizingFilter",
     # protocols
     "SessionProtocol",
     "CopilotClientProtocol",

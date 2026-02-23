@@ -1,5 +1,6 @@
 ---
 name: confidence-methodology
+agent: analysis
 description: Methodology for scoring confidence in secret validation findings.
 phase: 4-scoring-and-reporting
 required: true

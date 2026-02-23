@@ -1,5 +1,6 @@
 ---
 name: code-analysis
+agent: analysis
 description: Techniques for analyzing code context around secret locations to understand usage and intent.
 phase: 2-context-gathering
 required: true

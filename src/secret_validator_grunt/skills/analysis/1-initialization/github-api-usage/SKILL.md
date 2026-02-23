@@ -1,5 +1,6 @@
 ---
 name: github-api-usage
+agent: analysis
 description: Effective usage of GitHub API tools for fetching secret scanning alerts and locations.
 phase: 1-initialization
 required: true

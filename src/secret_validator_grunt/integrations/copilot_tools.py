@@ -23,11 +23,13 @@ from secret_validator_grunt.integrations.github import (
 
 
 def _parse_repo(repo: str) -> tuple[str, str]:
+	"""Split an 'owner/repo' string into (owner, name) tuple."""
 	owner, name = repo.split("/", 1)
 	return owner, name
 
 
 def _success(text: str, data: dict) -> ToolResult:
+	"""Build a successful ToolResult dict."""
 	return {
 	    "textResultForLlm": text,
 	    "resultType": "success",
@@ -39,6 +41,7 @@ def _success(text: str, data: dict) -> ToolResult:
 
 
 def _failure(msg: str) -> ToolResult:
+	"""Build a failure ToolResult dict with an error message."""
 	return {
 	    "textResultForLlm": msg,
 	    "resultType": "failure",
@@ -111,7 +114,7 @@ def secret_scanning_alert_tool(config: Config, context_repo: str | None,
 def secret_scanning_alert_locations_tool(config: Config,
                                          context_repo: str | None,
                                          context_alert_id: str | None) -> Tool:
-	"""Define a tool that fetches secret scanning alert locations via GitHub API."""
+	"""Fetch secret scanning alert locations via GitHub API."""
 
 	def handler(invocation: ToolInvocation) -> ToolResult:
 		params: dict[str, Any] = invocation.get("arguments") or {}

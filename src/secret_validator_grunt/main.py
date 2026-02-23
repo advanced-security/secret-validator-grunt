@@ -98,6 +98,17 @@ def run_impl(
 				     if report.confidence_score else None),
 				    risk_level=report.risk_level,
 				    key_finding=report.key_finding,
+				    challenge_verdict=(res.challenge_result.verdict
+				                       if res.challenge_result else None),
+				)
+		# Update challenger outcome states
+		for idx, res in enumerate(outcome.analysis_results):
+			cr = res.challenge_result
+			if cr:
+				ui.update_outcome(
+				    f"challenge-{idx}",
+				    verdict=cr.verdict,
+				    key_finding=cr.reasoning[:80] if cr.reasoning else None,
 				)
 		# Update judge outcome
 		if outcome.judge_result:
@@ -119,12 +130,12 @@ def run_impl(
 def run(
     org_repo: str,
     alert_id: str,
-    analyses: int = typer.Option(None, "--analyses",
-                                 help="Override analysis count"),
-    timeout: int = typer.Option(None, "--timeout",
-                                help="Override analysis timeout seconds"),
-    judge_timeout: int = typer.Option(None, "--judge-timeout",
-                                      help="Override judge timeout seconds"),
+    analyses: int | None = typer.Option(None, "--analyses",
+                                        help="Override analysis count"),
+    timeout: int | None = typer.Option(
+        None, "--timeout", help="Override analysis timeout seconds"),
+    judge_timeout: int | None = typer.Option(
+        None, "--judge-timeout", help="Override judge timeout seconds"),
     stream_verbose: bool = typer.Option(
         None,
         "--stream-verbose/--no-stream-verbose",
@@ -163,7 +174,8 @@ def entrypoint(argv=None, *, standalone_mode: bool = True):
 
 	_click_app = get_command(cli)
 	commands = getattr(_click_app, "commands", {}).keys()
-	# allow optional `run` prefix; default to run when first arg is not a command/option
+	# allow optional `run` prefix; default to run when
+	# first arg is not a command/option
 	if args and args[0] == "run":
 		args = args[1:]
 	if args and not args[0].startswith("-") and args[0] not in commands:

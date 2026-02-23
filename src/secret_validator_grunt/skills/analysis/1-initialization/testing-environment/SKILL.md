@@ -1,5 +1,6 @@
 ---
 name: testing-environment
+agent: analysis
 description: Guidelines for setting up isolated testing environments for secret validation scripts.
 phase: 1-initialization
 required: true
@@ -98,27 +99,44 @@ Use alternatives when:
 - Target system requires specific tooling
 - Existing code in repo demonstrates usage
 
-## Logging Test Results
+## Executing and Logging Test Results
 
-Save test results for evidence:
+### CRITICAL: You MUST Execute Scripts — Never Hand-Write Results
 
-```python
-import json
-from pathlib import Path
+Every verification script you create **MUST be executed via `bash`** and the real output captured. The log files in `logs/` must contain **actual stdout/stderr** from script execution, not hand-written summaries.
 
-def save_test_result(result: dict, log_dir: str = "logs"):
-    """Save test result to log file."""
-    log_path = Path(log_dir)
-    log_path.mkdir(exist_ok=True)
-    
-    timestamp = result.get("timestamp", "unknown")
-    log_file = log_path / f"test_{timestamp.replace(':', '-')}.json"
-    
-    with open(log_file, 'w') as f:
-        json.dump(result, f, indent=2)
-    
-    return str(log_file)
+**Correct workflow:**
+
+```bash
+# 1. Write your verification script to scripts/
+# 2. Execute it and capture real output
+cd workspace/scripts
+source venv/bin/activate
+python verify_secret.py 2>&1 | tee ../logs/verify_secret.log
+
+# The log file now contains the ACTUAL output
 ```
+
+**What is FORBIDDEN:**
+
+- Writing `test_results.json` or any results file by hand
+- Creating log files with assumed/expected output
+- Claiming tests passed without executing the script
+- Writing a script and a separate results file independently
+
+**The ONLY acceptable evidence** is stdout/stderr captured from actual script execution. If a script fails or produces unexpected output, report that honestly — fabricated results will be caught by the challenger agent.
+
+### Logging Multiple Tests
+
+If you run multiple verification steps, capture each one:
+
+```bash
+# Run each test and capture output
+python test_auth.py 2>&1 | tee ../logs/test_auth.log
+python test_connection.py 2>&1 | tee ../logs/test_connection.log
+```
+
+The `logs/` directory should contain only files produced by actual command execution.
 
 ## Running Tests Safely
 

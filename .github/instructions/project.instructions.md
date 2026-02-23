@@ -13,28 +13,31 @@ Entry point: `main.py:entrypoint()` → Typer CLI → `core/runner.py:run_all()`
 
 ## Architecture at a Glance
 
+- **Pre-clone**: Repository cloned once to `_shared_repo/`; each analysis workspace receives a copy
 - **N parallel analysis agents** examine a secret alert independently (default 3)
-- A **judge agent** reviews all analysis reports and selects the best one
-- Each analysis runs in its own Copilot session with tools and skills injected
+- **N parallel challenger agents** adversarially validate each report by inspecting the workspace
+- A **judge agent** reviews all analysis reports with challenge annotations and selects the best one
+- Each session runs in its own Copilot session with tools and skills injected
+- Sessions use continuation prompts to recover from early model termination
 - Results flow through `StreamCollector` which captures events, usage, and tool calls
-- The TUI (Rich Live) renders real-time progress and a final summary
+- The TUI (Rich Live) renders real-time progress (3 tables: analysis, challenger, judge) and a final summary
 
-Key data flow: `CLI → Config → runner.run_all → analysis × N + judge → RunOutcome → TUI`
+Key data flow: `CLI → Config → runner.run_all → pre_clone → analysis × N → challenge × N → judge → RunOutcome → TUI`
 
 ## Directory Structure Convention
 
 ```
 src/secret_validator_grunt/
-  core/        # Orchestration: runner, analysis, judge, skills
+  core/        # Orchestration: runner, analysis, challenge, judge, session, skills
   evals/       # Deterministic report evaluation checks
   integrations/# External tools: copilot_tools, custom_agents, github
   loaders/     # File loaders: agents, prompts, templates, frontmatter
   models/      # Pydantic models, one class per file
-  skills/      # Phase-organized markdown skill files
-  agents/      # Agent definition markdown files
-  prompts/     # Prompt template markdown files
+  skills/      # Per-agent skill directories (analysis/, challenger/, judge/)
+  agents/      # Agent definition markdown files (3 agents)
+  prompts/     # Prompt template markdown files (4 prompts)
   templates/   # Report template files
-  ui/          # TUI display, streaming event handler, reporting
+  ui/          # TUI display (3 tables), streaming event handler, reporting
   utils/       # Parsing, paths, logging, protocols
 ```
 
@@ -90,23 +93,34 @@ The post-implementation review step has caught real bugs:
 - **Inline dummy objects** preferred over complex mock hierarchies
 - Use `tmp_path` fixture for file system tests
 - Config in tests: always use alias names (see Config Gotcha above)
-- Current baseline: **214 tests**
+- Current baseline: **410 tests**
 
 ## Skills System
 
-Skills are markdown files organized into workflow phases under `skills/`:
+Skills are markdown files organized **per-agent** under `skills/`. Each agent type has its own skill directory:
 
 ```
-1-initialization/      # API setup, authentication
-2-context-gathering/   # Repository cloning, code scanning
-3-verification/        # Testing, validation, deterministic checks
-4-scoring-and-reporting/ # Confidence scoring methodology
-custom/                # Organization-specific extensions
+skills/
+  analysis/              # Analysis agent — workflow phases
+    1-initialization/    #   API setup, authentication
+    2-context-gathering/ #   Repository cloning, code scanning
+    3-verification/      #   Testing, validation, deterministic checks
+    4-scoring-and-reporting/ # Confidence scoring methodology
+    custom/              #   Organization-specific extensions
+  challenger/            # Challenger agent skills
+    false-indicator-recognition/
+    rotation-and-revocation-analysis/
+    secret-verification-methodology/
+  judge/                 # Judge agent skills (empty — .gitkeep)
 ```
 
-Each skill has a `SKILL.md` with YAML frontmatter (`required: true/false`, `hidden: true`). The manifest generator (`core/skills.py`) auto-discovers all skills at startup.
+Each skill has a `SKILL.md` with YAML frontmatter (`required: true/false`, `hidden: true`). The manifest generator (`core/skills.py`) auto-discovers skills per-agent at startup via `discover_skill_directories_for_agent(agent_type)`.
 
-To add a new skill: create `skills/<phase>/<name>/SKILL.md` with frontmatter and content. It is automatically discovered — no code changes needed.
+Valid agent types: `analysis`, `challenger`, `judge`.
+
+To add a new analysis skill: create `skills/analysis/<phase>/<name>/SKILL.md` with frontmatter. Auto-discovered.
+
+To add a new skill for another agent: create `skills/<agent-type>/<name>/SKILL.md`. Auto-discovered.
 
 ## Adding New Features — Checklist
 
@@ -124,8 +138,11 @@ To add a new skill: create `skills/<phase>/<name>/SKILL.md` with frontmatter and
 - **Pre-flight baseline** makes regressions immediately visible
 - **`--show-usage` gating pattern** keeps new diagnostic features from affecting default behavior
 - **Dynamic skill manifest** eliminated the need to manually register skills
-- **Phase-based skill organization** made skill discovery intuitive for agents
+- **Per-agent skill directories** made skill discovery intuitive and extensible for new agent types
 - **Post-implementation first-principles review** catches bugs that unit tests miss
+- **Pre-cloned repo strategy** — Clone once, copy to each workspace. Agent instructions say "DO NOT clone again".
+- **Continuation prompts for empty responses** — Instead of failing on early model termination, send a continuation prompt within the same session to recover context
+- **Adversarial challenge stage** — An independent challenger that validates evidence catches fabricated or misleading reports that the judge alone might miss
 
 ## Eval System
 
@@ -191,6 +208,11 @@ Do NOT use overlapping ranges or dict-based lookups for boundaries — use expli
 | `ANALYSIS_COUNT` | 3 | Parallel analysis count |
 | `ANALYSIS_TIMEOUT_SECONDS` | 1800 | Per-analysis timeout (seconds) |
 | `JUDGE_TIMEOUT_SECONDS` | 300 | Judge session timeout (seconds) |
+| `CHALLENGER_TIMEOUT_SECONDS` | 300 | Per-challenge timeout (seconds) |
+| `CHALLENGER_AGENT_FILE` | agents/challenger.agent.md | Challenger agent definition path |
+| `CHALLENGER_SKILL_DIRECTORIES` | [] | Additional challenger skill root directories |
+| `MAX_CONTINUATION_ATTEMPTS` | 2 | Max continuation prompts per session |
+| `MIN_RESPONSE_LENGTH` | 500 | Minimum response length before triggering continuation |
 | `SHOW_USAGE` | false | Enable diagnostics display and persistence |
 | `GITHUB_TOKEN` | None | GitHub API authentication |
 | `STREAM_VERBOSE` | false | Stream raw deltas to console |

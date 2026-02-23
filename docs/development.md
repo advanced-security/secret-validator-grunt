@@ -11,7 +11,7 @@ cp .env.example .env   # Set COPILOT_CLI_URL, GITHUB_TOKEN, etc.
 ## Running
 
 ```bash
-# Basic run (3 analyses + judge)
+# Basic run (3 analyses + challenge + judge)
 uv run secret-validator-grunt org/repo alert_id
 
 # Custom analysis count with diagnostics
@@ -48,14 +48,19 @@ Tests mirror the source structure. Each source module has a corresponding test f
 |-----------|----------|
 | `test_config.py` | Config model, env loading, validation, field defaults |
 | `test_cli.py` | CLI entry point, argument parsing |
+| `test_analysis_prompt.py` | Analysis prompt building, context injection |
+| `test_challenge.py` | Challenge prompt building, result parsing, run_single_challenge |
+| `test_session.py` | Shared session utilities: send_and_collect, continuation, destroy |
+| `test_pre_clone.py` | Pre-clone repository strategy, copytree, fallback behavior |
 | `test_skill_usage.py` | SkillUsageStats, compliance score, phase tracking |
 | `test_tool_usage.py` | ToolUsageStats, add_start/complete, success rates |
 | `test_streaming_progress.py` | StreamCollector event handling, skill/tool tracking integration |
-| `test_ui.py` | TUI rendering, table structure, show_usage gating |
+| `test_ui.py` | TUI rendering, table structure (3 tables), show_usage gating |
 | `test_tools.py` | Custom Copilot tools (GitHub API, validate_secret) |
-| `test_skills.py` | Skill discovery, manifest building, hidden skill detection |
+| `test_skills.py` | Per-agent skill discovery, manifest building, hidden skill detection |
 | `test_runner.py` | Orchestration integration (run_all) |
-| `test_judge_prompt.py` | Judge prompt formatting, skill usage summaries |
+| `test_summary.py` | Summary model, build_summary_data, challenger usage tracking |
+| `test_judge_prompt.py` | Judge prompt formatting, skill usage summaries, challenge annotations |
 | `test_judge_error_fallback.py` | Judge error handling and fallback behavior |
 | `test_report_parser.py` | Report.from_markdown parsing |
 | `test_report_parsing_tables.py` | Report table extraction edge cases |
@@ -67,9 +72,10 @@ Tests mirror the source structure. Each source module has a corresponding test f
 | `test_copilot_client.py` | Client factory modes |
 | `test_custom_agents.py` | AgentConfig → CustomAgentConfig conversion |
 | `test_parsing.py` | JSON extraction from fenced blocks |
-| `test_timeouts.py` | Analysis and judge timeout behavior |
+| `test_timeouts.py` | Analysis, judge and challenger timeout behavior |
 | `test_reporting.py` | Report rendering and file persistence |
 | `test_evals.py` | Eval checks, models, fixtures, orchestrator |
+| `test_logging.py` | TokenSanitizingFilter, sanitize_text, configure_logging |
 
 ### Test Patterns
 
@@ -105,6 +111,11 @@ The project uses tabs for indentation, consistent with `python.instructions.md`.
 | `ANALYSIS_COUNT` | 3 | Number of concurrent analyses |
 | `ANALYSIS_TIMEOUT_SECONDS` | 1800 | Per-analysis timeout (seconds) |
 | `JUDGE_TIMEOUT_SECONDS` | 300 | Judge session timeout (seconds) |
+| `CHALLENGER_TIMEOUT_SECONDS` | 300 | Per-challenge timeout (seconds) |
+| `CHALLENGER_AGENT_FILE` | (built-in path) | Path to challenger agent definition |
+| `CHALLENGER_SKILL_DIRECTORIES` | [] | Additional challenger skill root directories |
+| `MAX_CONTINUATION_ATTEMPTS` | 2 | Max continuation prompts per session |
+| `MIN_RESPONSE_LENGTH` | 500 | Minimum response length before triggering continuation |
 | `SHOW_USAGE` | False | Enable diagnostics tables and diagnostics.json |
 | `STREAM_VERBOSE` | False | Stream raw deltas to console |
 | `OUTPUT_DIR` | analysis | Base output directory |
@@ -115,7 +126,7 @@ The project uses tabs for indentation, consistent with `python.instructions.md`.
 | `POLL_INTERVAL_SECONDS` | 5 | Polling interval (seconds) |
 | `MAX_PARALLEL_SESSIONS` | None (=analysis_count) | Maximum parallel sessions |
 | `VALIDATE_SECRET_TIMEOUT_SECONDS` | 30 | Timeout for secret validators |
-| `SKILL_DIRECTORIES` | [] | Additional skill root directories |
+| `SKILL_DIRECTORIES` | [] | Additional analysis skill root directories |
 | `DISABLED_SKILLS` | [] | Skills to disable at runtime |
 
 ## Dependencies

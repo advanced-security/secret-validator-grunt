@@ -56,7 +56,7 @@ You will follow this established methodology to validate the secret:
 4. Copy, search, read all the relevant file contents from the locations. Look at all branches and commits not only the current/default branch.
 5. Always read the surrounding code to understand the context first and expand to other files to understand and build the context.
 6. Research online about the secret provider or the secret type how it works, how it is used, how it is tested.
-7. Write a test/script that executes a validation of the secret typically by trying to authenticate or connect to the service using the secret.
+7. Write a test/script that executes a validation of the secret typically by trying to authenticate or connect to the service using the secret. **You MUST execute the script via `bash` and capture the actual stdout/stderr to `logs/`.** NEVER write results files by hand — the `logs/` directory must contain only real output from script execution.
 8. Score the confidence of your findings based on the scoring methodology and document all the evidence you have collected.
 9. Review your findings and evidence in first principles to make sure you have not missed anything. If necessary go back to step 1 and re-read everything with your new knowledge.
 10. Build a final report of your findings with all the evidence.

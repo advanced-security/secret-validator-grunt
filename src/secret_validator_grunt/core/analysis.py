@@ -8,6 +8,7 @@ callbacks, and structured report parsing.
 from __future__ import annotations
 
 import json
+import shutil
 import uuid
 from pathlib import Path
 
@@ -20,13 +21,12 @@ from secret_validator_grunt.models.run_progress import (
 from secret_validator_grunt.models.run_result import AgentRunResult
 from secret_validator_grunt.models.report import Report
 from secret_validator_grunt.models.run_params import RunParams
+from secret_validator_grunt.models.skill_usage import SkillUsageStats
 from secret_validator_grunt.ui.streaming import (
     StreamCollector,
     ProgressCallback,
 )
-from secret_validator_grunt.integrations.custom_agents import to_custom_agent
 from secret_validator_grunt.integrations.copilot_tools import get_session_tools
-from secret_validator_grunt.loaders.templates import load_report_template
 from secret_validator_grunt.utils.paths import ensure_within
 from secret_validator_grunt.loaders.prompts import load_prompt
 from secret_validator_grunt.utils.logging import get_logger
@@ -37,9 +37,9 @@ from secret_validator_grunt.core.skills import (
     format_manifest_for_context,
 )
 from secret_validator_grunt.core.session import (
-    resolve_run_params,
     load_and_validate_template,
     discover_all_disabled_skills,
+    build_session_config,
     send_and_collect,
     destroy_session_safe,
 )
@@ -47,27 +47,46 @@ from secret_validator_grunt.core.session import (
 logger = get_logger(__name__)
 
 
-def _build_analysis_prompt(
-    base_prompt: str,
-    context_block: str,
-    report_template: str | None,
+def build_analysis_prompt(
+    prompt_template: str,
+    workspace_path: str,
+    org_repo: str,
+    alert_id: str,
+    report_template: str | None = None,
     skill_manifest_context: str | None = None,
+    repo_pre_cloned: bool = False,
 ) -> str:
-	"""Compose the full analysis prompt.
+	"""Compose analysis prompt with template variable substitution.
 
-	Joins the base prompt, context block, optional skill
-	manifest, and report template into a single string.
+	Replaces template placeholders in the prompt with actual values,
+	following the same pattern as build_challenge_prompt for consistency.
 
 	Parameters:
-		base_prompt: Loaded prompt template text.
-		context_block: Repository/alert context string.
+		prompt_template: Loaded prompt template text with placeholders.
+		workspace_path: Path to the analysis workspace directory.
+		org_repo: Repository in org/repo format.
+		alert_id: Secret scanning alert identifier.
 		report_template: Report template markdown, or None.
 		skill_manifest_context: Formatted skill manifest.
+		repo_pre_cloned: Whether the repo was pre-cloned into workspace.
 
 	Returns:
-		Combined prompt string.
+		Composed prompt string with all placeholders substituted.
 	"""
-	parts = [base_prompt, context_block]
+	# Substitute template variables
+	prompt = prompt_template.replace("{{workspace_path}}", workspace_path)
+	prompt = prompt.replace("{{org_repo}}", org_repo)
+	prompt = prompt.replace("{{alert_id}}", alert_id)
+
+	parts = [prompt]
+
+	if repo_pre_cloned:
+		parts.append("## Pre-cloned Repository\n\n"
+		             f"The repository has already been cloned for you at "
+		             f"`{workspace_path}/repo/`. "
+		             "Do NOT clone the repository again — it is ready to use. "
+		             "Skip the repository-acquisition step and proceed "
+		             "directly to analyzing the code.")
 
 	if skill_manifest_context:
 		parts.append(skill_manifest_context)
@@ -83,8 +102,8 @@ def _setup_workspace(
     config: Config,
     rp: RunParams,
     run_uuid: str,
-) -> tuple[Path, str, str]:
-	"""Create the run workspace and build the context block.
+) -> tuple[Path, Path]:
+	"""Create the run workspace directory.
 
 	Parameters:
 		config: Application configuration.
@@ -92,7 +111,7 @@ def _setup_workspace(
 		run_uuid: Unique identifier for this run.
 
 	Returns:
-		Tuple of (workspace path, context block string, stream log path).
+		Tuple of (workspace path, stream log path).
 	"""
 	workspace = ensure_within(
 	    config.output_path,
@@ -100,59 +119,13 @@ def _setup_workspace(
 	)
 	workspace.mkdir(parents=True, exist_ok=True)
 	stream_log_path = workspace / "stream.log"
-	context_block = (
-	    f"## Context\n\n- Repository: {rp.org_repo}\n- Alert ID: {rp.alert_id}\n"
-	    f"- Workspace: {workspace} !!! DO EVERYTHING HERE, ALWAYS !!!\n")
-	return workspace, context_block, stream_log_path
-
-
-def _build_session_config(
-    config: Config,
-    agent: AgentConfig,
-    workspace: Path,
-    skill_dirs: list[str],
-    disabled_skills: list[str],
-    session_tools: list,
-    rp: RunParams,
-    run_id: str,
-    run_uuid: str,
-) -> dict:
-	"""Build the session configuration dict for create_session().
-
-	Parameters:
-		config: Application configuration.
-		agent: Agent definition.
-		workspace: Run workspace path.
-		skill_dirs: Discovered skill directories.
-		disabled_skills: Skills to disable.
-		session_tools: Tool definitions for the session.
-		rp: Validated run parameters.
-		run_id: Analysis run identifier.
-		run_uuid: Unique run UUID.
-
-	Returns:
-		Session configuration dictionary.
-	"""
-	chosen_model = agent.model or config.model
-	return {
-	    "model": chosen_model,
-	    "streaming": True,
-	    "custom_agents": [to_custom_agent(agent)],
-	    "tools": session_tools,
-	    "available_tools": agent.tools or None,
-	    "skill_directories": [
-	        str(workspace.resolve()),
-	        *skill_dirs,
-	    ],
-	    "disabled_skills": disabled_skills or None,
-	    "session_id": f"{rp.session_id_prefix}-{run_id}-{run_uuid}",
-	}
+	return workspace, stream_log_path
 
 
 def _persist_diagnostics(
     run_id: str,
     collector: StreamCollector,
-    skill_usage: object,
+    skill_usage: SkillUsageStats,
     workspace: Path,
 ) -> None:
 	"""Write diagnostics JSON to the workspace directory.
@@ -189,25 +162,34 @@ async def run_analysis(
     client: CopilotClientProtocol,
     config: Config,
     agent: AgentConfig,
-    run_params: RunParams | None = None,
-    org_repo: str | None = None,
-    alert_id: str | None = None,
+    run_params: RunParams,
     progress_cb: ProgressCallback | None = None,
+    pre_cloned_repo: Path | None = None,
 ) -> AgentRunResult:
 	"""
 	Run a single analysis session.
 
-	- Streams deltas to a log file and optional progress callback.
-	- Parses the report markdown into a structured Report model.
+	Parameters:
+		run_id: Identifier for this analysis run.
+		client: Copilot client instance.
+		config: Application configuration.
+		agent: Agent configuration.
+		run_params: Validated run parameters.
+		progress_cb: Optional progress callback.
+		pre_cloned_repo: Path to pre-cloned repository.
+
+	Returns:
+		AgentRunResult with analysis output.
 	"""
+	rp = run_params
 	progress = AgentRunProgress(run_id=str(run_id), status=RunStatus.RUNNING)
 	workspace: Path | None = None
 	session = None
 	logger.info(
 	    "analysis %s start org_repo=%s alert_id=%s",
 	    run_id,
-	    org_repo,
-	    alert_id,
+	    rp.org_repo,
+	    rp.alert_id,
 	)
 	progress.log("analysis_started")
 	if progress_cb:
@@ -216,14 +198,36 @@ async def run_analysis(
 	try:
 		prompt_template = load_prompt("analysis_task.md")
 		continuation_prompt = load_prompt("continuation_task.md", )
-		rp = resolve_run_params(run_params, org_repo, alert_id)
 
 		run_uuid = uuid.uuid4().hex
-		workspace, context_block, stream_log_path = _setup_workspace(
+		workspace, stream_log_path = _setup_workspace(
 		    config,
 		    rp,
 		    run_uuid,
 		)
+
+		# Copy pre-cloned repo into workspace if available
+		repo_pre_cloned = False
+		if pre_cloned_repo and pre_cloned_repo.exists():
+			dest = workspace / "repo"
+			if not dest.exists():
+				try:
+					shutil.copytree(
+					    str(pre_cloned_repo),
+					    str(dest),
+					)
+					repo_pre_cloned = True
+					logger.debug(
+					    "analysis %s: repo copied from pre-clone",
+					    run_id,
+					)
+				except Exception as exc:
+					logger.warning(
+					    "analysis %s: repo copy failed: %s",
+					    run_id,
+					    exc,
+					)
+
 		if progress_cb:
 			progress_cb(run_id, f"workspace: {workspace}")
 
@@ -231,18 +235,22 @@ async def run_analysis(
 		    config.report_template_file)
 
 		# Build skill directories from phase-based structure + config overrides
-		skill_dirs = discover_skill_directories(config.skill_directories or [])
+		skill_dirs = discover_skill_directories(
+		    config.analysis_skill_directories or [])
 		skill_manifest = build_skill_manifest(skill_dirs)
 		skill_manifest_context = format_manifest_for_context(skill_manifest)
 
 		# Discover hidden skills (underscore-prefixed) to disable at runtime
 		disabled_skills = discover_all_disabled_skills(config)
 
-		prompt = _build_analysis_prompt(
+		prompt = build_analysis_prompt(
 		    prompt_template,
-		    context_block,
-		    report_template,
-		    skill_manifest_context,
+		    workspace_path=str(workspace),
+		    org_repo=rp.org_repo,
+		    alert_id=rp.alert_id,
+		    report_template=report_template,
+		    skill_manifest_context=skill_manifest_context,
+		    repo_pre_cloned=repo_pre_cloned,
 		)
 		agent_prompt = f"@{agent.name}\n{prompt}"
 		collector = StreamCollector(
@@ -255,17 +263,22 @@ async def run_analysis(
 		    disabled_skills=disabled_skills,
 		)
 
-		session_tools = get_session_tools(config, org_repo, alert_id)
-		session_config = _build_session_config(
+		session_tools = get_session_tools(
 		    config,
-		    agent,
-		    workspace,
-		    skill_dirs,
-		    disabled_skills,
-		    session_tools,
-		    rp,
-		    run_id,
-		    run_uuid,
+		    rp.org_repo,
+		    rp.alert_id,
+		)
+		session_config = build_session_config(
+		    model=agent.model or config.model,
+		    streaming=True,
+		    agent=agent,
+		    tools=session_tools,
+		    skill_directories=[
+		        str(workspace.resolve()),
+		        *skill_dirs,
+		    ],
+		    disabled_skills=disabled_skills,
+		    session_id=(f"{rp.session_id_prefix}-{run_id}-{run_uuid}"),
 		)
 		session = await client.create_session(session_config)
 		session.on(collector.handler)
@@ -322,4 +335,4 @@ async def run_analysis(
 		await destroy_session_safe(session, f"analysis {run_id}")
 
 
-__all__ = ["run_analysis"]
+__all__ = ["run_analysis", "build_analysis_prompt"]

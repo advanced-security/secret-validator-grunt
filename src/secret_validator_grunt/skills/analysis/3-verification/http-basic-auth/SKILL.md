@@ -1,5 +1,6 @@
 ---
 name: http-basic-auth
+agent: analysis
 description: Verification guide specific to HTTP Basic Authentication credentials.
 phase: 3-verification
 secret-type: http_basic_authentication_header

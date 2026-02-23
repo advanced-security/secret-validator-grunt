@@ -11,6 +11,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from secret_validator_grunt.models.judge_result import JudgeResult
+
 
 class WinnerInfo(BaseModel):
 	"""Extracted winner report fields for display."""
@@ -59,7 +61,7 @@ def build_summary_data(
     winner_index: int,
     analysis_results: list,
     output_dir: Path,
-    judge_result: object | None = None,
+    judge_result: JudgeResult | None = None,
     show_usage: bool = False,
 ) -> SummaryData:
 	"""Extract display data from analysis results and judge result.
@@ -118,8 +120,17 @@ def build_summary_data(
 
 	# Usage flags
 	if show_usage:
-		data.has_skill_usage = any(res.skill_usage for res in analysis_results)
-		data.has_tool_usage = any(res.tool_usage for res in analysis_results)
+		has_analysis_skill = any(res.skill_usage for res in analysis_results)
+		has_challenger_skill = any(
+		    res.challenge_result and res.challenge_result.skill_usage
+		    for res in analysis_results)
+		data.has_skill_usage = has_analysis_skill or has_challenger_skill
+
+		has_analysis_tool = any(res.tool_usage for res in analysis_results)
+		has_challenger_tool = any(
+		    res.challenge_result and res.challenge_result.tool_usage
+		    for res in analysis_results)
+		data.has_tool_usage = has_analysis_tool or has_challenger_tool
 
 	return data
 

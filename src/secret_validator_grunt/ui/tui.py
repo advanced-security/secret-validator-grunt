@@ -9,10 +9,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from collections import deque
 
 from rich.console import Console, Group
+
+if TYPE_CHECKING:
+	from secret_validator_grunt.models.run_result import AgentRunResult
+	from secret_validator_grunt.models.skill_usage import SkillUsageStats
+	from secret_validator_grunt.models.tool_usage import ToolUsageStats
 from rich.live import Live
 from rich.table import Table
 from rich.text import Text
@@ -35,6 +41,8 @@ class RunDisplayState:
 	confidence: str | None = None
 	risk_level: str | None = None
 	key_finding: str | None = None
+	# Challenge fields
+	challenge_verdict: str | None = None
 
 	def add_message(self, msg: str) -> None:
 		"""Add a message to the scrolling log."""
@@ -66,6 +74,15 @@ class RunDisplayState:
 			kf = self.key_finding[:80] + "..." if len(
 			    self.key_finding) > 80 else self.key_finding
 			text.append(f"finding: {kf}\n", style="white")
+		if self.challenge_verdict:
+			# CONFIRMED = red (threat confirmed), REFUTED = green (disproven)
+			if self.challenge_verdict.upper() == "CONFIRMED":
+				style = "red"
+			elif self.challenge_verdict.upper() == "REFUTED":
+				style = "green"
+			else:
+				style = "yellow"  # INSUFFICIENT_EVIDENCE
+			text.append(f"challenge: {self.challenge_verdict}\n", style=style)
 
 		for msg in self.messages:
 			clean = msg.strip()
@@ -98,6 +115,9 @@ class TUI:
 		    str(i): RunDisplayState(run_id=str(i))
 		    for i in range(analysis_count)
 		}
+		for i in range(analysis_count):
+			self.states[f"challenge-{i}"] = RunDisplayState(
+			    run_id=f"challenge-{i}")
 		self.states["judge"] = RunDisplayState(run_id="judge")
 		self.live: Live | None = None
 
@@ -114,13 +134,26 @@ class TUI:
 		]
 		runs_table.add_row(*cells)
 
+		# Challenger table
+		challenger_table = Table(box=box.ROUNDED, expand=True,
+		                         show_header=True)
+		for i in range(self.analysis_count):
+			challenger_table.add_column(f"Challenger {i}", min_width=30)
+
+		challenger_cells = [
+		    self.states[f"challenge-{i}"].render_cell(self.org_repo,
+		                                              self.alert_id)
+		    for i in range(self.analysis_count)
+		]
+		challenger_table.add_row(*challenger_cells)
+
 		# Judge table
 		judge_table = Table(box=box.ROUNDED, expand=True, show_header=True)
 		judge_table.add_column("Judge", min_width=30)
 		judge_table.add_row(self.states["judge"].render_cell(
 		    self.org_repo, self.alert_id))
 
-		return Group(runs_table, judge_table)
+		return Group(runs_table, challenger_table, judge_table)
 
 	def __enter__(self):
 		"""Start the Live display."""
@@ -148,6 +181,13 @@ class TUI:
 			state.status = "running"
 		elif msg.startswith("analysis_completed"):
 			state.status = "completed"
+		elif msg.startswith("challenge_started"):
+			state.status = "running"
+		elif msg.startswith("challenge_completed"):
+			state.status = "completed"
+		elif msg.startswith("verdict="):
+			state.status = "completed"
+			state.challenge_verdict = msg.split("=", 1)[1].strip()
 		elif msg.startswith("judge_started"):
 			state.status = "running"
 		elif msg.startswith("judge_completed"):
@@ -176,7 +216,7 @@ class TUI:
 		if self.live:
 			self.live.stop()
 
-	def _render_usage_table(self, analysis_results: list,
+	def _render_usage_table(self, analysis_results: list[AgentRunResult],
 	                        judge_result) -> Table:
 		"""Render token usage statistics table."""
 		from secret_validator_grunt.models.usage import (UsageStats, aggregate,
@@ -201,15 +241,38 @@ class TUI:
 			u = res.usage
 			if u:
 				inp, out, cost, dur = fmt_usage(u)
-				table.add_row(f"run {res.run_id}", inp, out, cost, dur)
+				table.add_row(
+				    f"run {res.run_id}",
+				    inp,
+				    out,
+				    cost,
+				    dur,
+				)
+
+		# Challenger rows (one per analysis)
+		for res in analysis_results:
+			cr = res.challenge_result
+			if cr and cr.usage:
+				inp, out, cost, dur = fmt_usage(cr.usage)
+				table.add_row(
+				    f"challenge {res.run_id}",
+				    inp,
+				    out,
+				    cost,
+				    dur,
+				)
 
 		ju = judge_result.usage if judge_result else None
 		if ju:
 			inp, out, cost, dur = fmt_usage(ju)
 			table.add_row("judge", inp, out, cost, dur)
 
-		# Totals
+		# Totals (analysis + challenger + judge)
 		all_usages = [r.usage for r in analysis_results]
+		for res in analysis_results:
+			cr = res.challenge_result
+			if cr and cr.usage:
+				all_usages.append(cr.usage)
 		if ju:
 			all_usages.append(ju)
 		all_usages = [u for u in all_usages if u]
@@ -225,9 +288,55 @@ class TUI:
 			)
 		return table
 
-	def _render_skill_usage_table(self, analysis_results: list) -> Table:
+	@staticmethod
+	def _add_skill_usage_row(
+	    table: Table,
+	    label: str,
+	    su: SkillUsageStats,
+	) -> None:
+		"""Add a single skill usage row to the table.
+
+		Parameters:
+			table: Rich Table to add the row to.
+			label: Row label (e.g. "run 0", "challenge 1").
+			su: Skill usage statistics.
 		"""
-		Render skill usage statistics table.
+		loaded_count = len(su.loaded_skills)
+		available_count = len(su.available_skills)
+		required_count = len(su.required_skills)
+		loaded_required = len(set(su.loaded_skills) & set(su.required_skills))
+
+		# Build phase breakdown string
+		available_by_phase = su.available_by_phase()
+		loaded_by_phase = su.loaded_by_phase()
+		phase_parts = []
+		for phase in sorted(available_by_phase.keys()):
+			avail = len(available_by_phase[phase])
+			loaded = len(loaded_by_phase.get(phase, []))
+			phase_parts.append(f"{phase}: {loaded}/{avail}")
+		phase_str = ("  ".join(phase_parts) if phase_parts else "-")
+
+		compliance = su.compliance_score
+		if compliance == 100:
+			compliance_style = "green"
+		elif compliance >= 50:
+			compliance_style = "yellow"
+		else:
+			compliance_style = "red"
+
+		table.add_row(
+		    label,
+		    f"{loaded_count}/{available_count}",
+		    phase_str,
+		    f"{loaded_required}/{required_count}",
+		    Text(f"{compliance:.0f}%", style=compliance_style),
+		)
+
+	def _render_skill_usage_table(
+	    self,
+	    analysis_results: list[AgentRunResult],
+	) -> Table:
+		"""Render skill usage statistics table.
 
 		Parameters:
 			analysis_results: List of agent run results with skill usage.
@@ -245,41 +354,71 @@ class TUI:
 		for res in analysis_results:
 			su = res.skill_usage
 			if su:
-				loaded_count = len(su.loaded_skills)
-				available_count = len(su.available_skills)
-				required_count = len(su.required_skills)
-				loaded_required = len(
-				    set(su.loaded_skills) & set(su.required_skills))
-
-				# Build phase breakdown string
-				available_by_phase = su.available_by_phase()
-				loaded_by_phase = su.loaded_by_phase()
-				phase_parts = []
-				for phase in sorted(available_by_phase.keys()):
-					avail = len(available_by_phase[phase])
-					loaded = len(loaded_by_phase.get(phase, []))
-					phase_parts.append(f"{phase}: {loaded}/{avail}")
-				phase_str = "  ".join(phase_parts) if phase_parts else "-"
-
-				compliance = su.compliance_score
-				compliance_style = "green" if compliance == 100 else (
-				    "yellow" if compliance >= 50 else "red")
-
-				table.add_row(
+				self._add_skill_usage_row(
+				    table,
 				    f"run {res.run_id}",
-				    f"{loaded_count}/{available_count}",
-				    phase_str,
-				    f"{loaded_required}/{required_count}",
-				    Text(f"{compliance:.0f}%", style=compliance_style),
+				    su,
 				)
 			else:
-				table.add_row(f"run {res.run_id}", "-", "-", "-", "-")
+				table.add_row(
+				    f"run {res.run_id}",
+				    "-",
+				    "-",
+				    "-",
+				    "-",
+				)
+
+		# Challenger rows
+		for res in analysis_results:
+			cr = res.challenge_result
+			if cr and cr.skill_usage:
+				self._add_skill_usage_row(
+				    table,
+				    f"challenge {res.run_id}",
+				    cr.skill_usage,
+				)
 
 		return table
 
-	def _render_tool_usage_table(self, analysis_results: list) -> Table:
+	@staticmethod
+	def _add_tool_usage_row(
+	    table: Table,
+	    label: str,
+	    tu: ToolUsageStats,
+	) -> None:
+		"""Add a single tool usage row to the table.
+
+		Parameters:
+			table: Rich Table to add the row to.
+			label: Row label (e.g. "run 0", "challenge 1").
+			tu: Tool usage statistics.
 		"""
-		Render tool usage statistics table.
+		rate = tu.success_rate
+		if rate == 100:
+			rate_style = "green"
+		elif rate >= 80:
+			rate_style = "yellow"
+		else:
+			rate_style = "red"
+
+		top = tu.top_tools(limit=5)
+		top_str = (" ".join(f"{t.tool_name}({t.total})"
+		                    for t in top) if top else "-")
+
+		table.add_row(
+		    label,
+		    str(tu.total_calls),
+		    str(tu.successful_calls),
+		    str(tu.failed_calls),
+		    Text(f"{rate:.0f}%", style=rate_style),
+		    top_str,
+		)
+
+	def _render_tool_usage_table(
+	    self,
+	    analysis_results: list[AgentRunResult],
+	) -> Table:
+		"""Render tool usage statistics table.
 
 		Parameters:
 			analysis_results: List of agent run results with tool usage.
@@ -298,21 +437,10 @@ class TUI:
 		for res in analysis_results:
 			tu = res.tool_usage
 			if tu:
-				rate = tu.success_rate
-				rate_style = "green" if rate == 100 else (
-				    "yellow" if rate >= 80 else "red")
-
-				top = tu.top_tools(limit=5)
-				top_str = " ".join(f"{t.tool_name}({t.total})"
-				                   for t in top) if top else "-"
-
-				table.add_row(
+				self._add_tool_usage_row(
+				    table,
 				    f"run {res.run_id}",
-				    str(tu.total_calls),
-				    str(tu.successful_calls),
-				    str(tu.failed_calls),
-				    Text(f"{rate:.0f}%", style=rate_style),
-				    top_str,
+				    tu,
 				)
 			else:
 				table.add_row(
@@ -324,12 +452,23 @@ class TUI:
 				    "-",
 				)
 
+		# Challenger rows
+		for res in analysis_results:
+			cr = res.challenge_result
+			if cr and cr.tool_usage:
+				self._add_tool_usage_row(
+				    table,
+				    f"challenge {res.run_id}",
+				    cr.tool_usage,
+				)
+
 		return table
 
 	def update_outcome(self, run_id: str, verdict: str | None = None,
 	                   confidence: str | None = None,
 	                   risk_level: str | None = None,
-	                   key_finding: str | None = None) -> None:
+	                   key_finding: str | None = None,
+	                   challenge_verdict: str | None = None) -> None:
 		"""Update outcome information for a run."""
 		state = self.states.get(run_id)
 		if not state:
@@ -342,11 +481,14 @@ class TUI:
 			state.risk_level = risk_level
 		if key_finding:
 			state.key_finding = key_finding
+		if challenge_verdict:
+			state.challenge_verdict = challenge_verdict
 		if self.live:
 			self.live.update(self._build_table())
 
-	def print_summary(self, winner_index: int, analysis_results: list,
-	                  output_dir: Path, judge_result=None):
+	def print_summary(self, winner_index: int,
+	                  analysis_results: list[AgentRunResult], output_dir: Path,
+	                  judge_result=None):
 		"""Print final summary after runs complete."""
 		from secret_validator_grunt.models.summary import build_summary_data
 
@@ -362,7 +504,12 @@ class TUI:
 		)
 		self._render_summary(data, analysis_results, judge_result)
 
-	def _render_summary(self, data, analysis_results: list, judge_result=None):
+	def _render_summary(
+	    self,
+	    data,
+	    analysis_results: list[AgentRunResult],
+	    judge_result=None,
+	):
 		"""Render the summary to console using pre-extracted data.
 
 		Parameters:

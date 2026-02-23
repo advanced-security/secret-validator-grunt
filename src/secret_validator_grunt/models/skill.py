@@ -27,6 +27,7 @@ class SkillInfo(BaseModel):
 		phase: The workflow phase this skill belongs to.
 		secret_type: The secret type this skill applies to.
 		required: Whether this skill must be loaded (vs optional).
+		agent: The agent type this skill belongs to.
 	"""
 
 	name: str = Field(description="Skill name")
@@ -38,6 +39,8 @@ class SkillInfo(BaseModel):
 	    default=None, description="Secret type this skill applies to")
 	required: bool = Field(default=False,
 	                       description="Whether this skill must be loaded")
+	agent: str = Field(default="analysis",
+	                   description="Agent type: analysis, challenger, judge")
 
 	def to_dict(self) -> dict[str, Any]:
 		"""
@@ -57,6 +60,8 @@ class SkillInfo(BaseModel):
 			result["secret_type"] = self.secret_type
 		if self.required:
 			result["required"] = self.required
+		if self.agent != "analysis":
+			result["agent"] = self.agent
 		return result
 
 

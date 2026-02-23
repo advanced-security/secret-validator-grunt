@@ -13,7 +13,7 @@ import re
 from secret_validator_grunt.models.agent_config import AgentConfig
 from secret_validator_grunt.loaders.frontmatter import split_frontmatter
 
-CODE_FENCE_RE = re.compile(r"```(?:markdown)?\s*(.*?)```", re.S)
+MARKDOWN_FENCE_RE = re.compile(r"```(?:markdown)?\s*(.*?)```", re.S)
 
 
 def _extract_report_template(body: str) -> str | None:
@@ -34,7 +34,7 @@ def _extract_report_template(body: str) -> str | None:
 	lower_body = body.lower()
 	idx = lower_body.find(marker)
 	search_text = body[idx:] if idx != -1 else body
-	m = CODE_FENCE_RE.search(search_text)
+	m = MARKDOWN_FENCE_RE.search(search_text)
 	if m:
 		return m.group(1).strip()
 	return None

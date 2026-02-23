@@ -3,12 +3,12 @@ import pytest
 from secret_validator_grunt.models.config import Config
 
 
-def test_skill_directories_parsing(tmp_path):
+def test_analysis_skill_directories_parsing(tmp_path):
 	dirs = [tmp_path / n for n in ("a", "b", "c")]
 	for d in dirs:
 		d.mkdir()
-	cfg = Config(SKILL_DIRECTORIES=",".join(str(d) for d in dirs))
-	assert cfg.skill_directories == [str(d) for d in dirs]
+	cfg = Config(ANALYSIS_SKILL_DIRECTORIES=",".join(str(d) for d in dirs))
+	assert cfg.analysis_skill_directories == [str(d) for d in dirs]
 
 
 def test_timeouts_defaults():

@@ -1,5 +1,6 @@
 ---
 name: internal-systems
+agent: analysis
 description: Guidelines for testing secrets that provide access to internal systems and networks.
 phase: 3-verification
 ---

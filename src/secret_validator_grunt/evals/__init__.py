@@ -16,7 +16,7 @@ from secret_validator_grunt.evals.checks import (
     has_verification_tests,
     has_code_evidence,
     verdict_confidence_coherent,
-    _score_to_label,
+    score_to_label,
 )
 
 __all__ = [
@@ -30,5 +30,5 @@ __all__ = [
     "has_verification_tests",
     "has_code_evidence",
     "verdict_confidence_coherent",
-    "_score_to_label",
+    "score_to_label",
 ]

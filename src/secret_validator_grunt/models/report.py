@@ -63,7 +63,20 @@ class Report(BaseModel):
 
 	@classmethod
 	def from_markdown(cls, md: str) -> "Report":
-		"""Parse canonical report markdown into a Report model."""
+		"""Parse canonical report markdown into a Report model.
+
+		Extracts metadata from the Executive Summary table via
+		regex, then populates optional detail sections (Locations,
+		Context, Verification Testing, Evidence, Confidence Scoring,
+		Risk Assessment, Verdict) using heading-based section
+		extraction.
+
+		Parameters:
+			md: Raw report markdown text.
+
+		Returns:
+			Populated Report instance.
+		"""
 		data = {}
 		# Executive Summary table
 		for key, val in SUMMARY_ROW_RE.findall(md):

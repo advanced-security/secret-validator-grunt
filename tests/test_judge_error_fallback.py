@@ -5,6 +5,7 @@ from secret_validator_grunt.core.judge import run_judge
 from secret_validator_grunt.models.agent_config import AgentConfig
 from secret_validator_grunt.models.config import Config
 from secret_validator_grunt.models.run_result import AgentRunResult
+from secret_validator_grunt.models.run_params import RunParams
 
 
 class DummySession:
@@ -47,7 +48,9 @@ async def test_judge_fallback_on_error():
 	    AgentRunResult(run_id="0", raw_markdown="report0"),
 	    AgentRunResult(run_id="1", raw_markdown="report1"),
 	]
-	jr = await run_judge(client, cfg, agent, results, org_repo="org/repo",
-	                     alert_id="1")
+	jr = await run_judge(
+	    client, cfg, agent, results,
+	    run_params=RunParams(org_repo="org/repo", alert_id="1"),
+	)
 	assert jr.winner_index == -1
 	assert "ERROR" in (jr.raw_response or "")

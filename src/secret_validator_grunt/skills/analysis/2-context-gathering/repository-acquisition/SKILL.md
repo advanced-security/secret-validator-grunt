@@ -1,5 +1,6 @@
 ---
 name: repository-acquisition
+agent: analysis
 description: Strategies for cloning repositories with full history into the workspace for analysis.
 phase: 2-context-gathering
 required: true

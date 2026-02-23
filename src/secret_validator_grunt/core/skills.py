@@ -18,8 +18,18 @@ from secret_validator_grunt.loaders.frontmatter import split_frontmatter
 
 logger = logging.getLogger(__name__)
 
-# Default skills directory relative to this module
-DEFAULT_SKILLS_DIRECTORY = Path(__file__).parent.parent / "skills"
+# Base skills directory: package root / skills
+# __file__ is at core/skills.py, so .parent.parent reaches package root.
+SKILLS_BASE = Path(__file__).parent.parent / "skills"
+
+# Default skills directory for the analysis agent
+DEFAULT_SKILLS_DIRECTORY = SKILLS_BASE / "analysis"
+
+# Challenger skills directory (flat layout, no phases)
+CHALLENGER_SKILLS_DIRECTORY = SKILLS_BASE / "challenger"
+
+# Valid agent types for skill discovery
+VALID_AGENT_TYPES = frozenset({"analysis", "challenger", "judge"})
 
 
 def _discover_phase_dirs(skills_root: Path) -> list[str]:
@@ -43,12 +53,11 @@ def _discover_phase_dirs(skills_root: Path) -> list[str]:
 
 
 def discover_skill_directories(
-        additional_dirs: list[str] | None = None) -> list[str]:
+    additional_dirs: list[str] | None = None, ) -> list[str]:
 	"""
-	Discover all skill directories to register with Copilot.
+	Discover analysis skill directories (backward-compatible wrapper).
 
-	Returns absolute paths to all phase directories from the default
-	location plus phase directories from any additional skill roots.
+	Equivalent to ``discover_skill_directories_for_agent("analysis", ...)``.
 
 	Parameters:
 		additional_dirs: Additional skill root directories from config.
@@ -56,6 +65,31 @@ def discover_skill_directories(
 	Returns:
 		List of absolute directory paths as strings.
 	"""
+	return discover_skill_directories_for_agent("analysis", additional_dirs)
+
+
+def discover_skill_directories_for_agent(
+    agent_type: str,
+    additional_dirs: list[str] | None = None,
+) -> list[str]:
+	"""
+	Discover skill directories for a specific agent type.
+
+	Looks for skills under ``SKILLS_BASE / agent_type``, then merges
+	any additional directories from config overrides.
+
+	For agents with phase-based organization (analysis), returns phase
+	directories. For agents with flat organization (challenger, judge),
+	returns the agent root directory.
+
+	Parameters:
+		agent_type: One of 'analysis', 'challenger', 'judge'.
+		additional_dirs: Additional skill root directories from config.
+
+	Returns:
+		List of absolute directory paths as strings.
+	"""
+	agent_root = SKILLS_BASE / agent_type
 	seen: set[str] = set()
 	dirs: list[str] = []
 
@@ -64,33 +98,33 @@ def discover_skill_directories(
 			seen.add(path)
 			dirs.append(path)
 
-	# Add phase-based skill directories from default location
-	for d in _discover_phase_dirs(DEFAULT_SKILLS_DIRECTORY):
-		add_unique(d)
+	# Analysis uses phase-based organization; others use flat layout
+	if agent_type == "analysis":
+		# Add phase-based skill directories from agent-specific root
+		for d in _discover_phase_dirs(agent_root):
+			add_unique(d)
+	else:
+		# Flat layout: add the agent root if it has skills
+		if agent_root.exists() and agent_root.is_dir():
+			has_skill_children = any((child / "SKILL.md").exists()
+			                         for child in agent_root.iterdir()
+			                         if child.is_dir())
+			if has_skill_children:
+				add_unique(str(agent_root.resolve()))
 
-	# Add phase directories from additional skill roots
+	# Add additional directories from config
 	if additional_dirs:
 		for d in additional_dirs:
 			path = Path(d).resolve()
 			if not path.exists() or not path.is_dir():
 				continue
 
-			# Skip if this is the default skills dir (already processed)
-			if path == DEFAULT_SKILLS_DIRECTORY.resolve():
+			# Skip if this is the agent root (already processed)
+			if path == agent_root.resolve():
 				continue
 
-			# Check if this directory contains skill subdirectories
-			has_skill_children = any((child / "SKILL.md").exists()
-			                         for child in path.iterdir()
-			                         if child.is_dir())
-
-			if has_skill_children:
-				# This is a skill container, add it directly
-				add_unique(str(path))
-			else:
-				# This might be a skills root, discover phase children
-				for phase_dir in _discover_phase_dirs(path):
-					add_unique(phase_dir)
+			# Add the directory directly (Copilot scans recursively)
+			add_unique(str(path))
 
 	return dirs
 
@@ -151,6 +185,7 @@ def discover_skills(skills_dir: Path) -> list[SkillInfo]:
 			         or _infer_phase_from_path(skill_file, skills_dir))
 			secret_type = (meta.get("secret-type") or meta.get("secret_type"))
 			required = meta.get("required", False)
+			agent = meta.get("agent", "analysis")
 
 			skills.append(
 			    SkillInfo(
@@ -160,6 +195,7 @@ def discover_skills(skills_dir: Path) -> list[SkillInfo]:
 			        phase=phase,
 			        secret_type=secret_type,
 			        required=bool(required),
+			        agent=agent,
 			    ))
 		except Exception as exc:
 			logger.debug("Failed to parse skill %s: %s", skill_file, exc)
@@ -171,7 +207,7 @@ def discover_skills(skills_dir: Path) -> list[SkillInfo]:
 
 
 def build_skill_manifest(
-        skills_dirs: list[Path] | Path | list[str] | str) -> SkillManifest:
+    skills_dirs: list[Path] | Path | list[str] | str, ) -> SkillManifest:
 	"""
 	Build a complete skill manifest from one or more skill directories.
 
@@ -314,9 +350,31 @@ def format_manifest_for_context(manifest: SkillManifest) -> str:
 	return "\n".join(lines)
 
 
+def discover_challenger_skill_directories(
+    additional_dirs: list[str] | None = None, ) -> list[str]:
+	"""Discover skill directories for the challenger agent.
+
+	Backward-compatible wrapper for
+	``discover_skill_directories_for_agent("challenger", ...)``.
+
+	Parameters:
+		additional_dirs: Extra skill directories from
+			CHALLENGER_SKILL_DIRECTORIES config.
+
+	Returns:
+		List of absolute directory paths as strings.
+	"""
+	return discover_skill_directories_for_agent("challenger", additional_dirs)
+
+
 __all__ = [
+    "SKILLS_BASE",
     "DEFAULT_SKILLS_DIRECTORY",
+    "CHALLENGER_SKILLS_DIRECTORY",
+    "VALID_AGENT_TYPES",
     "discover_skill_directories",
+    "discover_skill_directories_for_agent",
+    "discover_challenger_skill_directories",
     "discover_skills",
     "discover_hidden_skills",
     "build_skill_manifest",

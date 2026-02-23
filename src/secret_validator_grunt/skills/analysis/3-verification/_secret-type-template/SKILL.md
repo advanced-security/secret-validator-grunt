@@ -1,5 +1,6 @@
 ---
 name: secret-type-template
+agent: analysis
 description: Template for creating new secret-type-specific verification guides.
 phase: 3-verification
 secret-type: _template

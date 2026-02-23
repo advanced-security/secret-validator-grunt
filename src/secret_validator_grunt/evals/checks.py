@@ -37,7 +37,7 @@ REQUIRED_SECTIONS = [
 # Confidence label boundaries (exclusive upper for lower tiers).
 # High: score >= 7.0, Medium: 4.0 <= score < 7.0, Low: score < 4.0
 #
-# Boundary ownership is explicit in _score_to_label() below;
+# Boundary ownership is explicit in score_to_label() below;
 # do NOT rely on dict ordering or overlapping ranges.
 
 # Regex for detecting file path references in markdown.
@@ -122,7 +122,7 @@ def valid_confidence_score(report: Report) -> EvalCheck:
 	)
 
 
-def _score_to_label(score: float) -> str | None:
+def score_to_label(score: float) -> str | None:
 	"""Map a confidence score to its expected label.
 
 	Boundaries are exclusive on the upper end for lower tiers:
@@ -151,7 +151,7 @@ def confidence_label_matches_score(report: Report) -> EvalCheck:
 		    passed=False,
 		    message="Score or label missing; cannot validate",
 		)
-	expected = _score_to_label(score)
+	expected = score_to_label(score)
 	if expected is None:
 		return EvalCheck(
 		    name="confidence_label_matches_score",

@@ -4,6 +4,7 @@ import asyncio
 from secret_validator_grunt.core.analysis import run_analysis
 from secret_validator_grunt.models.agent_config import AgentConfig
 from secret_validator_grunt.models.config import Config
+from secret_validator_grunt.models.run_params import RunParams
 from copilot.generated.session_events import SessionEventType
 
 
@@ -96,8 +97,7 @@ async def test_streaming_progress_default_concise():
 	    client,
 	    cfg,
 	    agent,
-	    org_repo="org/repo",
-	    alert_id="1",
+	    run_params=RunParams(org_repo="org/repo", alert_id="1"),
 	    progress_cb=progress_cb,
 	)
 	assert not any('delta' in m for _, m in seen)
@@ -120,8 +120,7 @@ async def test_streaming_progress_verbose():
 	    client,
 	    cfg,
 	    agent,
-	    org_repo="org/repo",
-	    alert_id="1",
+	    run_params=RunParams(org_repo="org/repo", alert_id="1"),
 	    progress_cb=progress_cb,
 	)
 	assert any('delta' in m for _, m in seen)
@@ -558,8 +557,7 @@ async def test_diagnostics_json_written_with_show_usage():
 	    client,
 	    cfg,
 	    agent,
-	    org_repo="org/repo",
-	    alert_id="1",
+	    run_params=RunParams(org_repo="org/repo", alert_id="1"),
 	)
 
 	assert res.workspace is not None
@@ -585,8 +583,7 @@ async def test_diagnostics_json_not_written_without_show_usage():
 	    client,
 	    cfg,
 	    agent,
-	    org_repo="org/repo",
-	    alert_id="1",
+	    run_params=RunParams(org_repo="org/repo", alert_id="1"),
 	)
 
 	assert res.workspace is not None

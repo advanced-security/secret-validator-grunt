@@ -3,44 +3,14 @@
 import pytest
 import asyncio
 
-from secret_validator_grunt.models.run_params import RunParams
 from secret_validator_grunt.models.config import Config
 from secret_validator_grunt.core.session import (
-    resolve_run_params,
     load_and_validate_template,
     discover_all_disabled_skills,
     send_and_collect,
     destroy_session_safe,
-    _is_empty,
+    is_response_empty,
 )
-
-# ── resolve_run_params ────────────────────────────────────────────────
-
-
-def test_resolve_run_params_passthrough():
-	"""Returns existing RunParams unchanged."""
-	rp = RunParams(org_repo="o/r", alert_id="1")
-	assert resolve_run_params(rp, None, None) is rp
-
-
-def test_resolve_run_params_from_strings():
-	"""Creates RunParams from org_repo and alert_id when None."""
-	rp = resolve_run_params(None, "owner/repo", "42")
-	assert rp.org_repo == "owner/repo"
-	assert rp.alert_id == "42"
-
-
-def test_resolve_run_params_missing_raises():
-	"""Raises ValueError when all params are None."""
-	with pytest.raises(ValueError, match="org_repo and alert_id are required"):
-		resolve_run_params(None, None, None)
-
-
-def test_resolve_run_params_missing_alert_raises():
-	"""Raises ValueError when alert_id is missing."""
-	with pytest.raises(ValueError):
-		resolve_run_params(None, "o/r", None)
-
 
 # ── load_and_validate_template ─────────────────────────────────────────
 
@@ -186,43 +156,43 @@ async def test_destroy_session_safe_error():
 	await destroy_session_safe(_FailSession(), "test")  # should not raise
 
 
-# ── _is_empty ─────────────────────────────────────────────────────────
+# ── is_response_empty ─────────────────────────────────────────────────
 
 
 class TestIsEmpty:
-	"""Tests for the _is_empty helper."""
+	"""Tests for the is_response_empty helper."""
 
 	def test_none(self):
 		"""None is empty."""
-		assert _is_empty(None, 500) is True
+		assert is_response_empty(None, 500) is True
 
 	def test_empty_string(self):
 		"""Empty string is empty."""
-		assert _is_empty("", 500) is True
+		assert is_response_empty("", 500) is True
 
 	def test_whitespace_only(self):
 		"""Whitespace-only string is empty."""
-		assert _is_empty("   \n\t  ", 500) is True
+		assert is_response_empty("   \n\t  ", 500) is True
 
 	def test_short_string(self):
 		"""String shorter than min_length is empty."""
-		assert _is_empty("short response", 500) is True
+		assert is_response_empty("short response", 500) is True
 
 	def test_long_enough(self):
 		"""String at or above min_length is not empty."""
-		assert _is_empty("x" * 500, 500) is False
+		assert is_response_empty("x" * 500, 500) is False
 
 	def test_above_min(self):
 		"""String well above min_length is not empty."""
-		assert _is_empty("x" * 1000, 500) is False
+		assert is_response_empty("x" * 1000, 500) is False
 
 	def test_zero_min_length(self):
 		"""With min_length=0, any non-empty string passes."""
-		assert _is_empty("hi", 0) is False
+		assert is_response_empty("hi", 0) is False
 
 	def test_zero_min_length_empty(self):
 		"""With min_length=0, empty string is still empty."""
-		assert _is_empty("", 0) is True
+		assert is_response_empty("", 0) is True
 
 
 # ── send_and_collect continuation ─────────────────────────────────────

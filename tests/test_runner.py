@@ -3,6 +3,7 @@ import pytest
 from secret_validator_grunt.core.runner import run_all
 from secret_validator_grunt.models.config import Config
 from secret_validator_grunt.models.judge_result import JudgeResult, JudgeScore
+from secret_validator_grunt.models.run_params import RunParams
 
 
 class DummySession:
@@ -67,16 +68,13 @@ class DummyClient:
 
 @pytest.mark.asyncio
 async def test_run_all_saves_final_report(tmp_path, monkeypatch):
-	cfg = Config(
-	    COPILOT_CLI_URL="http://x",
-	    OUTPUT_DIR=str(tmp_path),
-	    ANALYSIS_COUNT=1,
-	    MAX_CONTINUATION_ATTEMPTS=0,
-	)
+	cfg = Config(COPILOT_CLI_URL="http://x", OUTPUT_DIR=str(tmp_path),
+	             ANALYSIS_COUNT=1, MAX_CONTINUATION_ATTEMPTS=0)
 	agent_file = tmp_path / "agent.md"
 	agent_file.write_text("""---\nname: a\n---\nprompt""", encoding="utf-8")
 	cfg.agent_file = str(agent_file)
 	cfg.judge_agent_file = str(agent_file)
+	cfg.challenger_agent_file = str(agent_file)
 	analysis_md = """# Secret Validation Report: Alert ID 1\n\n## Executive Summary\n\n| Item | Value |\n| --- | --- |\n| Repository | org/repo |\n| Alert ID | 1 |\n| Secret Type | type |\n| Verdict | OK |\n| Confidence Score | 5/10 (Medium) |\n| Risk Level | Medium |\n| Status | Open |\n| Analyst | test |\n| Report Date | 2026-01-28 |\n\n> **Key Finding:** test\n"""
 	judge_json = """Now I'll judge.Now I'll judge.```json\n{\n  \"winner_index\": 0,\n  \"scores\": [{\n    \"report_index\": 0,\n    \"score\": 1\n  }]\n}\n```"""
 	client = DummyClient([analysis_md], judge_json)
@@ -85,7 +83,9 @@ async def test_run_all_saves_final_report(tmp_path, monkeypatch):
 	    lambda cfg: client,
 	)
 
-	outcome = await run_all(cfg, org_repo="org/repo", alert_id="1")
+	outcome = await run_all(
+	    cfg, RunParams(org_repo="org/repo", alert_id="1"),
+	)
 	assert outcome.judge_result.winner_index == 0
 	alert_dir = tmp_path / "org" / "repo" / "1"
 	assert (alert_dir / "final-report.md").exists()
@@ -94,22 +94,19 @@ async def test_run_all_saves_final_report(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_run_all_handles_analysis_exception(tmp_path, monkeypatch):
-	cfg = Config(
-	    COPILOT_CLI_URL="http://x",
-	    OUTPUT_DIR=str(tmp_path),
-	    ANALYSIS_COUNT=1,
-	    MAX_CONTINUATION_ATTEMPTS=0,
-	)
+	cfg = Config(COPILOT_CLI_URL="http://x", OUTPUT_DIR=str(tmp_path),
+	             ANALYSIS_COUNT=1, MAX_CONTINUATION_ATTEMPTS=0)
 	agent_file = tmp_path / "agent.md"
 	agent_file.write_text("""---\nname: a\n---\nprompt""", encoding="utf-8")
 	cfg.agent_file = str(agent_file)
 	cfg.judge_agent_file = str(agent_file)
+	cfg.challenger_agent_file = str(agent_file)
 
 	async def boom(*args, **kwargs):
 		raise RuntimeError("boom")
 
-	async def dummy_judge(client, config, agent, results, org_repo=None,
-	                      alert_id=None, run_params=None, progress_cb=None):
+	async def dummy_judge(client, config, agent, results,
+	                      run_params=None, progress_cb=None):
 		return JudgeResult(
 		    winner_index=-1,
 		    scores=[JudgeScore(report_index=0, score=0)],
@@ -126,7 +123,9 @@ async def test_run_all_handles_analysis_exception(tmp_path, monkeypatch):
 	monkeypatch.setattr("secret_validator_grunt.core.runner.run_judge",
 	                    dummy_judge)
 
-	outcome = await run_all(cfg, org_repo="org/repo", alert_id="1")
+	outcome = await run_all(
+	    cfg, RunParams(org_repo="org/repo", alert_id="1"),
+	)
 	assert len(outcome.analysis_results) == 1
 	assert outcome.analysis_results[0].error == "boom"
 
@@ -160,6 +159,7 @@ async def test_run_all_uses_custom_agents_and_prompts(tmp_path, monkeypatch):
 	)
 	cfg.agent_file = str(agent_file)
 	cfg.judge_agent_file = str(agent_file)
+	cfg.challenger_agent_file = str(agent_file)
 
 	client = DummyClient(["analysis"], "{}")
 	monkeypatch.setattr(
@@ -167,23 +167,26 @@ async def test_run_all_uses_custom_agents_and_prompts(tmp_path, monkeypatch):
 	    lambda cfg: client,
 	)
 
-	await run_all(cfg, org_repo="org/repo", alert_id="1")
+	await run_all(
+	    cfg, RunParams(org_repo="org/repo", alert_id="1"),
+	)
 
 	assert client.session_configs, "Expected at least one session config"
 	assert client.session_configs[0]["custom_agents"][0]["name"] == "a"
 	assert client.session_configs[0]["available_tools"] == ["tool1"]
 	assert client.sessions[0].last_prompt is not None
 	assert client.sessions[0].last_prompt.startswith("@a")
-	assert client.sessions[1].last_prompt.startswith("@a")
+	# sessions[1] = challenger, sessions[2] = judge
+	assert client.sessions[2].last_prompt.startswith("@a")
 
 	skills = client.session_configs[0]["skill_directories"]
 	assert skills[0].startswith(str(tmp_path))
 	assert skills[-2:] == [str(skill1), str(skill2)]
 	# Config disabled_skills + hidden skills (underscore-prefixed) are combined
 	assert "skill2" in client.session_configs[0]["disabled_skills"]
-	assert "skill2" in client.session_configs[1]["disabled_skills"]
+	assert "skill2" in client.session_configs[2]["disabled_skills"]
 
 	# judge session config should include system_message and no streaming
-	judge_cfg = client.session_configs[1]
+	judge_cfg = client.session_configs[2]
 	assert judge_cfg["streaming"] is False
 	assert "system_message" in judge_cfg

@@ -59,26 +59,32 @@ When `--show-usage` is active, each analysis run writes `diagnostics.json` to it
 }
 ```
 
-This file lives alongside the report and stream log in the per-run UUID directory. It replaces the need to parse raw `events.jsonl` from the Copilot session state directory.
+This file lives alongside the report and stream log in the per-run UUID directory. Challenger sessions also write diagnostics to `challenge-{i}/diagnostics.json`. It replaces the need to parse raw `events.jsonl` from the Copilot session state directory.
 
 ## TUI Display
 
 The `TUI` class uses Rich `Live` display with auto-refresh during execution:
 
-**During runs**: Grid of analysis cells showing real-time status, workspace path, latest messages, and outcome data (verdict, confidence, risk level) as they become available. Judge gets its own row.
+**During runs**: Grid of three tables showing real-time status:
+- **Analysis table** — N analysis cells with workspace path, latest messages, and outcome data (verdict, confidence, risk level) as they become available
+- **Challenger table** — N challenge cells showing challenge verdict (CONFIRMED / REFUTED / INSUFFICIENT_EVIDENCE) as each completes
+- **Judge table** — Judge cell with winner selection and rationale
 
 **After completion** (`print_summary()`):
 - Winner report table (verdict, confidence, risk, key finding)
 - Judge decision table (winner, rationale)
 - All workspace paths
 - With `--show-usage`:
-  - Usage table (tokens, requests, duration per run + totals)
+  - Usage table (tokens, requests, duration per run + challenger runs + judge + totals)
   - Skill usage table (skills loaded, by phase breakdown, required count, compliance %)
   - Tool usage table (total, success, failed, rate, top tools per run)
 
 ## Logging
 
-Module-level loggers via `utils/logging.py`. Key log points:
+Module-level loggers via `utils/logging.py`. `configure_logging()` sets up the root logger with a standard format and installs a `TokenSanitizingFilter` that automatically redacts credentials embedded in git-style URLs (e.g., `https://user:TOKEN@host` → `https://user:***@host`). This filter runs on all log records transparently — no call-site awareness is required. A standalone `sanitize_text()` function is also exported for non-logging use cases.
+
+### Key log points
+
 - Analysis start/complete with org_repo and alert_id
 - Skill tracking events (debug level)
 - Tool execution events (when verbose)

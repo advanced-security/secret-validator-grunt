@@ -12,47 +12,67 @@ import asyncio
 from pathlib import Path
 
 from secret_validator_grunt.models.config import Config
-from secret_validator_grunt.models.run_params import RunParams
+from secret_validator_grunt.models.agent_config import AgentConfig
 from secret_validator_grunt.loaders.templates import load_report_template
 from secret_validator_grunt.ui.streaming import (
     StreamCollector,
     ProgressCallback,
     fetch_last_assistant_message,
 )
-from secret_validator_grunt.integrations.copilot_tools import get_session_tools
+from secret_validator_grunt.integrations.custom_agents import to_custom_agent
 from secret_validator_grunt.core.skills import (
-    discover_skill_directories,
     discover_hidden_skills,
     DEFAULT_SKILLS_DIRECTORY,
 )
 from secret_validator_grunt.utils.logging import get_logger
+from secret_validator_grunt.utils.protocols import SessionProtocol
 
 logger = get_logger(__name__)
 
 
-def resolve_run_params(
-    run_params: RunParams | None,
-    org_repo: str | None,
-    alert_id: str | None,
-) -> RunParams:
-	"""Resolve RunParams from explicit params or org_repo/alert_id fallback.
+def build_session_config(
+    *,
+    model: str,
+    streaming: bool,
+    agent: AgentConfig,
+    tools: list,
+    skill_directories: list[str],
+    disabled_skills: list[str] | None = None,
+    system_message: str | None = None,
+    session_id: str | None = None,
+) -> dict:
+	"""Build a session configuration dict for create_session().
+
+	Centralizes the common session config structure used by
+	analysis, judge, and challenger stages.
 
 	Parameters:
-		run_params: Pre-built run params, or None.
-		org_repo: Fallback org/repo string.
-		alert_id: Fallback alert ID string.
+		model: Model identifier string.
+		streaming: Whether to enable streaming.
+		agent: Agent configuration.
+		tools: Tool definitions for the session.
+		skill_directories: Skill directory paths.
+		disabled_skills: Skills to disable, or None.
+		system_message: Optional system message text.
+		session_id: Optional session identifier.
 
 	Returns:
-		Validated RunParams instance.
-
-	Raises:
-		ValueError: If run_params is None and org_repo/alert_id are missing.
+		Session configuration dictionary.
 	"""
-	if run_params is not None:
-		return run_params
-	if not org_repo or not alert_id:
-		raise ValueError("org_repo and alert_id are required")
-	return RunParams(org_repo=org_repo, alert_id=alert_id)
+	config: dict = {
+	    "model": model,
+	    "streaming": streaming,
+	    "custom_agents": [to_custom_agent(agent)],
+	    "tools": tools,
+	    "available_tools": agent.tools or None,
+	    "skill_directories": skill_directories,
+	    "disabled_skills": disabled_skills or None,
+	}
+	if system_message is not None:
+		config["system_message"] = {"text": system_message}
+	if session_id is not None:
+		config["session_id"] = session_id
+	return config
 
 
 def load_and_validate_template(template_path: str) -> str:
@@ -73,21 +93,27 @@ def load_and_validate_template(template_path: str) -> str:
 	return template
 
 
-def discover_all_disabled_skills(config: Config) -> list[str]:
-	"""Discover hidden skills and merge with config-disabled skills.
+def discover_all_disabled_skills(
+    config: Config,
+    skills_directory: Path | None = None,
+) -> list[str]:
+	"""Discover hidden skills and merge with config-disabled.
 
 	Parameters:
 		config: Application configuration.
+		skills_directory: Root directory for skill discovery.
+			Defaults to DEFAULT_SKILLS_DIRECTORY.
 
 	Returns:
 		Deduplicated list of skill names to disable.
 	"""
-	hidden = discover_hidden_skills(DEFAULT_SKILLS_DIRECTORY)
+	base = skills_directory or DEFAULT_SKILLS_DIRECTORY
+	hidden = discover_hidden_skills(base)
 	return list(set(hidden + (config.disabled_skills or [])))
 
 
 async def send_and_collect(
-    session: object,
+    session: SessionProtocol,
     prompt: str,
     timeout: int,
     collector: StreamCollector,
@@ -141,7 +167,7 @@ async def send_and_collect(
 	# --- continuation loop ---
 	if continuation_prompt and max_continuations > 0:
 		attempts = 0
-		while attempts < max_continuations and _is_empty(
+		while attempts < max_continuations and is_response_empty(
 		    raw,
 		    min_response_length,
 		):
@@ -168,7 +194,7 @@ async def send_and_collect(
 			    reraise=reraise,
 			)
 
-		if _is_empty(raw, min_response_length):
+		if is_response_empty(raw, min_response_length):
 			logger.error(
 			    "analysis %s: still empty after %d continuations",
 			    run_id,
@@ -183,7 +209,7 @@ async def send_and_collect(
 	return raw
 
 
-def _is_empty(raw: str | None, min_length: int) -> bool:
+def is_response_empty(raw: str | None, min_length: int) -> bool:
 	"""Return True when the response is too short.
 
 	Parameters:
@@ -198,7 +224,7 @@ def _is_empty(raw: str | None, min_length: int) -> bool:
 
 
 async def _send_once(
-    session: object,
+    session: SessionProtocol,
     prompt: str,
     timeout: int,
     collector: StreamCollector,
@@ -251,7 +277,10 @@ async def _send_once(
 	return raw
 
 
-async def destroy_session_safe(session: object | None, label: str) -> None:
+async def destroy_session_safe(
+    session: SessionProtocol | None,
+    label: str,
+) -> None:
 	"""Destroy a session, logging but not raising on failure.
 
 	Parameters:
@@ -267,10 +296,10 @@ async def destroy_session_safe(session: object | None, label: str) -> None:
 
 
 __all__ = [
-    "resolve_run_params",
+    "build_session_config",
     "load_and_validate_template",
     "discover_all_disabled_skills",
     "send_and_collect",
     "destroy_session_safe",
-    "_is_empty",
+    "is_response_empty",
 ]

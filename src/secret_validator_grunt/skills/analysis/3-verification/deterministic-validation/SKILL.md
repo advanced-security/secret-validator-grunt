@@ -1,5 +1,6 @@
 ---
 name: deterministic-validation
+agent: analysis
 description: Use the validate-secrets tool for deterministic secret validation when a matching validator is available.
 phase: 3-verification
 required: true

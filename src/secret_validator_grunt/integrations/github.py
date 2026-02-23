@@ -64,9 +64,14 @@ def list_alert_locations(api: GhApi, owner: str, repo: str, alert_number: int,
 		# paged() yields pages (L lists), flatten to individual locations
 		return [
 		    dict(loc) for page in paged(
-		        api, "GET",
-		        f"/repos/{owner}/{repo}/secret-scanning/alerts/{alert_number}/locations",
-		        per_page=per_page, _pages=max_pages) for loc in page
+		        api,
+		        "GET",
+		        f"/repos/{owner}/{repo}"
+		        f"/secret-scanning/alerts"
+		        f"/{alert_number}/locations",
+		        per_page=per_page,
+		        _pages=max_pages,
+		    ) for loc in page
 		]
 	except Exception as exc:  # noqa: BLE001
 		raise _wrap_error(exc)

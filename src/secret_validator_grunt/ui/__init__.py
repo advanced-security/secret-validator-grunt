@@ -15,7 +15,10 @@ from secret_validator_grunt.ui.streaming import (
     ProgressCallback,
     fetch_last_assistant_message,
 )
-from secret_validator_grunt.ui.reporting import render_report_md, save_report_md
+from secret_validator_grunt.ui.reporting import (
+    render_report_md,
+    save_report_md,
+)
 
 __all__ = [
     "TUI",
