@@ -5,6 +5,7 @@ import pytest
 from secret_validator_grunt.core.runner import (
 	run_all,
 	_persist_eval_results,
+	_run_eval_checks,
 )
 from secret_validator_grunt.models.config import Config
 from secret_validator_grunt.models.eval_result import EvalCheck, EvalResult
@@ -356,3 +357,30 @@ class TestPersistEvalResults:
 		res = _make_result(str(ws), eval_result=_make_eval_result())
 		# Should not raise — logs a debug message instead
 		_persist_eval_results([res])
+
+
+class TestRunEvalChecks:
+	"""Tests for _run_eval_checks."""
+
+	def test_malformed_markdown_does_not_crash(
+	    self, monkeypatch,
+	):
+		"""Malformed markdown that raises during parsing
+		is caught gracefully — eval_result stays None.
+		"""
+		def _boom(md):
+			raise ValueError("bad markdown")
+
+		monkeypatch.setattr(
+		    "secret_validator_grunt.core.runner"
+		    ".Report.from_markdown",
+		    _boom,
+		)
+		res = AgentRunResult(
+		    run_id="run-0",
+		    raw_markdown="# garbage",
+		    report=None,
+		)
+		results = _run_eval_checks([res])
+		assert len(results) == 1
+		assert results[0].eval_result is None

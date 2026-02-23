@@ -123,7 +123,16 @@ def _run_eval_checks(
 		# res.report, but errors may leave it None).
 		report = res.report
 		if not report and res.raw_markdown:
-			report = Report.from_markdown(res.raw_markdown)
+			try:
+				report = Report.from_markdown(
+				    res.raw_markdown)
+			except Exception:
+				logger.warning(
+				    "report %s: markdown parsing failed, "
+				    "skipping eval checks",
+				    res.run_id,
+				    exc_info=True,
+				)
 		if report:
 			eval_result = run_all_checks(
 			    report, report_id=res.run_id)
