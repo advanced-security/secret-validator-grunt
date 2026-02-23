@@ -90,13 +90,21 @@ def normalize_heading(h: str) -> str:
 	"""
 	Normalize headings for case-insensitive matching.
 
+	Strips leading numeric prefixes (e.g. ``4.`` from
+	``4. Verification Testing``) so that numbered and
+	un-numbered headings normalise identically.  This
+	mirrors the ``(?:\\d+\\.\\s+)?`` pattern used by
+	``has_required_sections`` in ``evals/checks.py``.
+
 	Parameters:
 		h: Heading text to normalize.
 
 	Returns:
-		Lowercase heading with non-alphanumeric chars replaced by spaces.
+		Lowercase heading with numeric prefix removed
+		and non-alphanumeric chars replaced by spaces.
 	"""
-	return re.sub(r"[^a-z0-9]+", " ", h.lower()).strip()
+	stripped = re.sub(r"^\d+\.\s*", "", h)
+	return re.sub(r"[^a-z0-9]+", " ", stripped.lower()).strip()
 
 
 def parse_sections(md: str) -> dict[str, str]:

@@ -8,6 +8,7 @@ final validation outcomes.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import shutil
 from pathlib import Path
@@ -22,6 +23,8 @@ from secret_validator_grunt.ui.streaming import ProgressCallback
 from secret_validator_grunt.models.run_result import AgentRunResult
 from secret_validator_grunt.models.run_outcome import RunOutcome
 from secret_validator_grunt.models.run_params import RunParams
+from secret_validator_grunt.models.report import Report
+from secret_validator_grunt.evals.checks import run_all_checks
 from secret_validator_grunt.utils.paths import ensure_within
 from secret_validator_grunt.utils.logging import get_logger
 from secret_validator_grunt.copilot_client import create_client
@@ -95,6 +98,88 @@ async def pre_clone_repo(
 		)
 		shutil.rmtree(repo_dir, ignore_errors=True)
 		return None
+
+
+def _run_eval_checks(
+    results: list[AgentRunResult],
+) -> list[AgentRunResult]:
+	"""Run deterministic eval checks on each parsed report.
+
+	Attaches an EvalResult to each AgentRunResult that has
+	a parseable report. Logs warnings for failed checks and
+	info for passed checks.
+
+	Parameters:
+		results: List of analysis results to evaluate.
+
+	Returns:
+		Updated list with eval_result attached to each
+		result that has a parsed report.
+	"""
+	evaluated: list[AgentRunResult] = []
+	for res in results:
+		# Prefer pre-parsed report; fall back to re-parsing
+		# raw markdown (defensive — run_analysis normally sets
+		# res.report, but errors may leave it None).
+		report = res.report
+		if not report and res.raw_markdown:
+			report = Report.from_markdown(res.raw_markdown)
+		if report:
+			eval_result = run_all_checks(
+			    report, report_id=res.run_id)
+			res = res.model_copy(
+			    update={"eval_result": eval_result})
+			if not eval_result.passed:
+				failed = [
+				    c.name for c in eval_result.checks
+				    if c.severity == "error"
+				    and not c.passed
+				]
+				logger.warning(
+				    "report %s failed eval checks: %s",
+				    res.run_id,
+				    ", ".join(failed),
+				)
+			else:
+				logger.info(
+				    "report %s passed all eval checks",
+				    res.run_id,
+				)
+		evaluated.append(res)
+	return evaluated
+
+
+def _persist_eval_results(
+    results: list[AgentRunResult],
+) -> None:
+	"""Append eval_result to each run's diagnostics.json.
+
+	Updates the existing diagnostics.json (written by
+	``_persist_diagnostics`` in ``analysis.py``) with the
+	``eval_result`` key.  Skipped silently when the file
+	does not exist (i.e. ``show_usage`` was off during
+	analysis) or the result has no workspace.
+
+	Parameters:
+		results: Analysis results with eval_result attached.
+	"""
+	for res in results:
+		if not res.workspace or not res.eval_result:
+			continue
+		diag_path = Path(res.workspace) / "diagnostics.json"
+		if not diag_path.exists():
+			continue
+		try:
+			data = json.loads(diag_path.read_text())
+			data["eval_result"] = res.eval_result.model_dump()
+			diag_path.write_text(json.dumps(data, indent=2))
+		except Exception:
+			logger.debug(
+			    "failed to update diagnostics.json with "
+			    "eval_result for run %s",
+			    res.run_id,
+			    exc_info=True,
+			)
 
 
 async def run_all(
@@ -187,6 +272,13 @@ async def run_all(
 				if res.workspace:
 					save_report_md(
 					    Path(res.workspace) / "report.md", res.raw_markdown)
+
+		# run eval checks on each parsed report
+		results = _run_eval_checks(results)
+
+		# persist eval results into existing diagnostics.json
+		if config.show_usage:
+			_persist_eval_results(results)
 
 		# challenge stage
 		challenge_results = await run_challenges(
