@@ -24,8 +24,8 @@ def create_client(config: Config) -> CopilotClient:
 
 	# Native stdio mode
 	opts: dict[str, Any] = {"log_level": config.log_level}
-	if config.github_token:
-		opts["github_token"] = config.github_token
+	if config.resolved_copilot_token:
+		opts["github_token"] = config.resolved_copilot_token
 	return CopilotClient(opts)
 
 

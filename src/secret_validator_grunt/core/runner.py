@@ -100,9 +100,7 @@ async def pre_clone_repo(
 		return None
 
 
-def _run_eval_checks(
-    results: list[AgentRunResult],
-) -> list[AgentRunResult]:
+def _run_eval_checks(results: list[AgentRunResult], ) -> list[AgentRunResult]:
 	"""Run deterministic eval checks on each parsed report.
 
 	Attaches an EvalResult to each AgentRunResult that has
@@ -124,8 +122,7 @@ def _run_eval_checks(
 		report = res.report
 		if not report and res.raw_markdown:
 			try:
-				report = Report.from_markdown(
-				    res.raw_markdown)
+				report = Report.from_markdown(res.raw_markdown)
 			except Exception:
 				logger.warning(
 				    "report %s: markdown parsing failed, "
@@ -134,15 +131,12 @@ def _run_eval_checks(
 				    exc_info=True,
 				)
 		if report:
-			eval_result = run_all_checks(
-			    report, report_id=res.run_id)
-			res = res.model_copy(
-			    update={"eval_result": eval_result})
+			eval_result = run_all_checks(report, report_id=res.run_id)
+			res = res.model_copy(update={"eval_result": eval_result})
 			if not eval_result.passed:
 				failed = [
 				    c.name for c in eval_result.checks
-				    if c.severity == "error"
-				    and not c.passed
+				    if c.severity == "error" and not c.passed
 				]
 				logger.warning(
 				    "report %s failed eval checks: %s",
@@ -158,9 +152,7 @@ def _run_eval_checks(
 	return evaluated
 
 
-def _persist_eval_results(
-    results: list[AgentRunResult],
-) -> None:
+def _persist_eval_results(results: list[AgentRunResult], ) -> None:
 	"""Append eval_result to each run's diagnostics.json.
 
 	Updates the existing diagnostics.json (written by

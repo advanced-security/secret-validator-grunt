@@ -85,6 +85,12 @@ The Copilot SDK client supports two modes configured via `COPILOT_CLI_URL`:
 - **Native stdio** (default): Spawns the Copilot CLI as a subprocess, communicates via JSON-RPC over stdio
 - **External server**: Connects to a running Copilot CLI server at the given URL (useful for development/debugging)
 
+### Token Configuration
+
+Two separate tokens can be configured for different concerns:
+- **`GITHUB_TOKEN`** — Used for GitHub REST API calls (secret scanning alerts, locations) and authenticated git clones. Required for all modes.
+- **`COPILOT_TOKEN`** — Used for Copilot CLI authentication in native stdio mode. If unset, falls back to `GITHUB_TOKEN`. Ignored in external server mode (the server manages its own auth).
+
 ## Output Structure
 
 Each run creates a workspace directory per analysis:

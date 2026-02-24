@@ -11,8 +11,8 @@ import pytest
 from pydantic import ValidationError
 
 from secret_validator_grunt.models.challenge_result import (
-	ChallengeResult,
-	VALID_CHALLENGE_VERDICTS,
+    ChallengeResult,
+    VALID_CHALLENGE_VERDICTS,
 )
 from secret_validator_grunt.models.run_result import AgentRunResult
 from secret_validator_grunt.models.run_outcome import RunOutcome
@@ -36,12 +36,12 @@ class TestChallengeResultModel:
 	def test_full_construction(self):
 		"""ChallengeResult can be constructed with all fields."""
 		cr = ChallengeResult(
-			verdict="REFUTED",
-			reasoning="Secret was rotated 2 days ago",
-			evidence_gaps=["no rotation check", "accepted alert validity"],
-			verification_reproduced=True,
-			verification_result="401 Unauthorized",
-			contradicting_evidence=["API returned expired error"],
+		    verdict="REFUTED",
+		    reasoning="Secret was rotated 2 days ago",
+		    evidence_gaps=["no rotation check", "accepted alert validity"],
+		    verification_reproduced=True,
+		    verification_result="401 Unauthorized",
+		    contradicting_evidence=["API returned expired error"],
 		)
 		assert cr.verdict == "REFUTED"
 		assert cr.reasoning == "Secret was rotated 2 days ago"
@@ -90,12 +90,12 @@ class TestChallengeResultModel:
 	def test_serialization_roundtrip(self):
 		"""ChallengeResult can be serialized and deserialized."""
 		original = ChallengeResult(
-			verdict="REFUTED",
-			reasoning="Test reasoning",
-			evidence_gaps=["gap1", "gap2"],
-			verification_reproduced=False,
-			verification_result="connection refused",
-			contradicting_evidence=["evidence1"],
+		    verdict="REFUTED",
+		    reasoning="Test reasoning",
+		    evidence_gaps=["gap1", "gap2"],
+		    verification_reproduced=False,
+		    verification_result="connection refused",
+		    contradicting_evidence=["evidence1"],
 		)
 		json_data = original.model_dump()
 		restored = ChallengeResult(**json_data)
@@ -131,13 +131,13 @@ class TestAgentRunResultWithChallenge:
 	def test_with_challenge_result(self):
 		"""AgentRunResult can store challenge_result."""
 		cr = ChallengeResult(
-			verdict="CONFIRMED",
-			reasoning="Evidence verified",
+		    verdict="CONFIRMED",
+		    reasoning="Evidence verified",
 		)
 		result = AgentRunResult(
-			run_id="0",
-			progress_log=[],
-			challenge_result=cr,
+		    run_id="0",
+		    progress_log=[],
+		    challenge_result=cr,
 		)
 		assert result.challenge_result is not None
 		assert result.challenge_result.verdict == "CONFIRMED"
@@ -161,11 +161,11 @@ class TestRunOutcomeWithChallenge:
 	def test_default_challenge_results_is_empty(self):
 		"""challenge_results defaults to empty list."""
 		outcome = RunOutcome(
-			judge_result=JudgeResult(
-				winner_index=0,
-				scores=[JudgeScore(report_index=0, score=8)],
-			),
-			analysis_results=[AgentRunResult(run_id="0", progress_log=[])],
+		    judge_result=JudgeResult(
+		        winner_index=0,
+		        scores=[JudgeScore(report_index=0, score=8)],
+		    ),
+		    analysis_results=[AgentRunResult(run_id="0", progress_log=[])],
 		)
 		assert outcome.challenge_results == []
 
@@ -174,18 +174,18 @@ class TestRunOutcomeWithChallenge:
 		cr0 = ChallengeResult(verdict="CONFIRMED")
 		cr1 = ChallengeResult(verdict="REFUTED")
 		outcome = RunOutcome(
-			judge_result=JudgeResult(
-				winner_index=0,
-				scores=[
-					JudgeScore(report_index=0, score=8),
-					JudgeScore(report_index=1, score=6),
-				],
-			),
-			analysis_results=[
-				AgentRunResult(run_id="0", progress_log=[]),
-				AgentRunResult(run_id="1", progress_log=[]),
-			],
-			challenge_results=[cr0, cr1],
+		    judge_result=JudgeResult(
+		        winner_index=0,
+		        scores=[
+		            JudgeScore(report_index=0, score=8),
+		            JudgeScore(report_index=1, score=6),
+		        ],
+		    ),
+		    analysis_results=[
+		        AgentRunResult(run_id="0", progress_log=[]),
+		        AgentRunResult(run_id="1", progress_log=[]),
+		    ],
+		    challenge_results=[cr0, cr1],
 		)
 		assert len(outcome.challenge_results) == 2
 		assert outcome.challenge_results[0].verdict == "CONFIRMED"
@@ -235,8 +235,7 @@ class TestChallengerConfig:
 		"""challenger_skill_directories parses comma-separated string."""
 		# Use paths that don't exist to test parsing (filtered later)
 		config = Config(
-			CHALLENGER_SKILL_DIRECTORIES="/nonexistent/a,/nonexistent/b"
-		)
+		    CHALLENGER_SKILL_DIRECTORIES="/nonexistent/a,/nonexistent/b")
 		# After filter_existing, both are removed
 		assert config.challenger_skill_directories == []
 
@@ -246,9 +245,7 @@ class TestChallengerConfig:
 		d1.mkdir()
 		d2 = tmp_path / "skill2"
 		d2.mkdir()
-		config = Config(
-			CHALLENGER_SKILL_DIRECTORIES=[str(d1), str(d2)]
-		)
+		config = Config(CHALLENGER_SKILL_DIRECTORIES=[str(d1), str(d2)])
 		assert len(config.challenger_skill_directories) == 2
 		assert str(d1) in config.challenger_skill_directories
 		assert str(d2) in config.challenger_skill_directories
@@ -258,8 +255,7 @@ class TestChallengerConfig:
 		d1 = tmp_path / "exists"
 		d1.mkdir()
 		config = Config(
-			CHALLENGER_SKILL_DIRECTORIES=[str(d1), "/nonexistent/path"]
-		)
+		    CHALLENGER_SKILL_DIRECTORIES=[str(d1), "/nonexistent/path"])
 		assert config.challenger_skill_directories == [str(d1)]
 
 
@@ -269,9 +265,9 @@ class TestChallengeResultEdgeCases:
 	def test_empty_lists(self):
 		"""Empty lists are valid for list fields."""
 		cr = ChallengeResult(
-			verdict="CONFIRMED",
-			evidence_gaps=[],
-			contradicting_evidence=[],
+		    verdict="CONFIRMED",
+		    evidence_gaps=[],
+		    contradicting_evidence=[],
 		)
 		assert cr.evidence_gaps == []
 		assert cr.contradicting_evidence == []
@@ -279,9 +275,9 @@ class TestChallengeResultEdgeCases:
 	def test_none_verification_fields(self):
 		"""None is valid for optional verification fields."""
 		cr = ChallengeResult(
-			verdict="INSUFFICIENT_EVIDENCE",
-			verification_reproduced=None,
-			verification_result=None,
+		    verdict="INSUFFICIENT_EVIDENCE",
+		    verification_reproduced=None,
+		    verification_result=None,
 		)
 		assert cr.verification_reproduced is None
 		assert cr.verification_result is None
@@ -290,8 +286,8 @@ class TestChallengeResultEdgeCases:
 		"""Long reasoning strings are accepted."""
 		long_reasoning = "A" * 10000
 		cr = ChallengeResult(
-			verdict="REFUTED",
-			reasoning=long_reasoning,
+		    verdict="REFUTED",
+		    reasoning=long_reasoning,
 		)
 		assert len(cr.reasoning) == 10000
 
@@ -299,8 +295,8 @@ class TestChallengeResultEdgeCases:
 		"""Special characters in evidence are preserved."""
 		evidence = ["path/to/file.py:42", "```code```", "émoji 🔐"]
 		cr = ChallengeResult(
-			verdict="REFUTED",
-			contradicting_evidence=evidence,
+		    verdict="REFUTED",
+		    contradicting_evidence=evidence,
 		)
 		assert cr.contradicting_evidence == evidence
 
@@ -311,10 +307,8 @@ class TestChallengerAgentLoading:
 	def test_agent_file_exists(self):
 		"""Challenger agent file exists."""
 		from pathlib import Path
-		agent_path = (
-			Path(__file__).parent.parent /
-			"src/secret_validator_grunt/agents/challenger.agent.md"
-		)
+		agent_path = (Path(__file__).parent.parent /
+		              "src/secret_validator_grunt/agents/challenger.agent.md")
 		assert agent_path.exists()
 
 	def test_agent_loads_correctly(self):
@@ -329,10 +323,13 @@ class TestChallengerAgentLoading:
 		from secret_validator_grunt.loaders.agents import load_agent
 		agent = load_agent("agents/challenger.agent.md")
 		expected_tools = [
-			"view", "read", "grep", "bash",
-			"gh_secret_scanning_alert",
-			"validate_secret",
-			"skill",
+		    "view",
+		    "read",
+		    "grep",
+		    "bash",
+		    "gh_secret_scanning_alert",
+		    "validate_secret",
+		    "skill",
 		]
 		for tool in expected_tools:
 			assert tool in agent.tools, f"Missing tool: {tool}"
@@ -352,10 +349,8 @@ class TestChallengePromptLoading:
 	def test_prompt_file_exists(self):
 		"""Challenge prompt file exists."""
 		from pathlib import Path
-		prompt_path = (
-			Path(__file__).parent.parent /
-			"src/secret_validator_grunt/prompts/challenge_task.md"
-		)
+		prompt_path = (Path(__file__).parent.parent /
+		               "src/secret_validator_grunt/prompts/challenge_task.md")
 		assert prompt_path.exists()
 
 	def test_prompt_loads_correctly(self):
@@ -386,52 +381,42 @@ class TestChallengerSkills:
 	def test_challenger_skills_directory_exists(self):
 		"""Challenger skills directory exists."""
 		from pathlib import Path
-		skills_dir = (
-			Path(__file__).parent.parent /
-			"src/secret_validator_grunt/skills/challenger"
-		)
+		skills_dir = (Path(__file__).parent.parent /
+		              "src/secret_validator_grunt/skills/challenger")
 		assert skills_dir.exists()
 		assert skills_dir.is_dir()
 
 	def test_secret_verification_methodology_exists(self):
 		"""secret-verification-methodology skill exists."""
 		from pathlib import Path
-		skill_path = (
-			Path(__file__).parent.parent /
-			"src/secret_validator_grunt/skills/challenger/"
-			"secret-verification-methodology/SKILL.md"
-		)
+		skill_path = (Path(__file__).parent.parent /
+		              "src/secret_validator_grunt/skills/challenger/"
+		              "secret-verification-methodology/SKILL.md")
 		assert skill_path.exists()
 
 	def test_rotation_revocation_skill_exists(self):
 		"""rotation-and-revocation-analysis skill exists."""
 		from pathlib import Path
-		skill_path = (
-			Path(__file__).parent.parent /
-			"src/secret_validator_grunt/skills/challenger/"
-			"rotation-and-revocation-analysis/SKILL.md"
-		)
+		skill_path = (Path(__file__).parent.parent /
+		              "src/secret_validator_grunt/skills/challenger/"
+		              "rotation-and-revocation-analysis/SKILL.md")
 		assert skill_path.exists()
 
 	def test_false_indicator_skill_exists(self):
 		"""false-indicator-recognition skill exists."""
 		from pathlib import Path
-		skill_path = (
-			Path(__file__).parent.parent /
-			"src/secret_validator_grunt/skills/challenger/"
-			"false-indicator-recognition/SKILL.md"
-		)
+		skill_path = (Path(__file__).parent.parent /
+		              "src/secret_validator_grunt/skills/challenger/"
+		              "false-indicator-recognition/SKILL.md")
 		assert skill_path.exists()
 
 	def test_skill_has_frontmatter(self):
 		"""Challenger skills have proper YAML frontmatter."""
 		from pathlib import Path
 		from secret_validator_grunt.loaders.frontmatter import split_frontmatter
-		skill_path = (
-			Path(__file__).parent.parent /
-			"src/secret_validator_grunt/skills/challenger/"
-			"secret-verification-methodology/SKILL.md"
-		)
+		skill_path = (Path(__file__).parent.parent /
+		              "src/secret_validator_grunt/skills/challenger/"
+		              "secret-verification-methodology/SKILL.md")
 		content = skill_path.read_text()
 		frontmatter, _ = split_frontmatter(content)
 		assert frontmatter is not None
@@ -456,10 +441,10 @@ class TestBuildChallengePrompt:
 		template = "Report:\n{{report_markdown}}\n\nWorkspace:\n{{workspace_path}}"
 		rp = RunParams(org_repo="org/repo", alert_id="123")
 		result = build_challenge_prompt(
-			report_markdown="# My Report",
-			workspace_path="/tmp/ws",
-			prompt_template=template,
-			run_params=rp,
+		    report_markdown="# My Report",
+		    workspace_path="/tmp/ws",
+		    prompt_template=template,
+		    run_params=rp,
 		)
 		assert "{{report_markdown}}" not in result
 		assert "{{workspace_path}}" not in result
@@ -474,10 +459,10 @@ class TestBuildChallengePrompt:
 		template = "Workspace: {{workspace_path}}"
 		rp = RunParams(org_repo="org/repo", alert_id="123")
 		result = build_challenge_prompt(
-			report_markdown="report",
-			workspace_path=None,
-			prompt_template=template,
-			run_params=rp,
+		    report_markdown="report",
+		    workspace_path=None,
+		    prompt_template=template,
+		    run_params=rp,
 		)
 		assert "(no workspace available)" in result
 
@@ -489,10 +474,10 @@ class TestBuildChallengePrompt:
 		template = "Report: {{report_markdown}}"
 		rp = RunParams(org_repo="org/repo", alert_id="123")
 		result = build_challenge_prompt(
-			report_markdown="",
-			workspace_path="/ws",
-			prompt_template=template,
-			run_params=rp,
+		    report_markdown="",
+		    workspace_path="/ws",
+		    prompt_template=template,
+		    run_params=rp,
 		)
 		assert result == "Report: "
 
@@ -606,9 +591,9 @@ class TestChallengerSkillManifestAlignment:
 	def test_required_flag_flows_through_manifest(self):
 		"""Required flag from SKILL.md frontmatter appears in formatted context."""
 		from secret_validator_grunt.core.skills import (
-			discover_challenger_skill_directories,
-			build_skill_manifest,
-			format_manifest_for_context,
+		    discover_challenger_skill_directories,
+		    build_skill_manifest,
+		    format_manifest_for_context,
 		)
 
 		skill_dirs = discover_challenger_skill_directories()
@@ -621,9 +606,9 @@ class TestChallengerSkillManifestAlignment:
 	def test_required_skills_marked_in_formatted_context(self):
 		"""Each skill with required=True gets **⚠️ REQUIRED** in the formatted context."""
 		from secret_validator_grunt.core.skills import (
-			discover_challenger_skill_directories,
-			build_skill_manifest,
-			format_manifest_for_context,
+		    discover_challenger_skill_directories,
+		    build_skill_manifest,
+		    format_manifest_for_context,
 		)
 
 		skill_dirs = discover_challenger_skill_directories()
@@ -641,9 +626,9 @@ class TestChallengerSkillManifestAlignment:
 	def test_non_required_skill_omits_required_marker(self):
 		"""Skills with required=False do NOT get the REQUIRED marker."""
 		from secret_validator_grunt.core.skills import (
-			discover_challenger_skill_directories,
-			build_skill_manifest,
-			format_manifest_for_context,
+		    discover_challenger_skill_directories,
+		    build_skill_manifest,
+		    format_manifest_for_context,
 		)
 
 		skill_dirs = discover_challenger_skill_directories()
@@ -658,15 +643,14 @@ class TestChallengerSkillManifestAlignment:
 			for line in context.splitlines():
 				if skill.name in line:
 					assert "REQUIRED" not in line, (
-						f"Non-required skill {skill.name!r} should not "
-						f"have REQUIRED marker"
-					)
+					    f"Non-required skill {skill.name!r} should not "
+					    f"have REQUIRED marker")
 
 	def test_manifest_context_unconditional(self):
 		"""format_manifest_for_context always returns a string, even with empty manifest."""
 		from secret_validator_grunt.core.skills import (
-			build_skill_manifest,
-			format_manifest_for_context,
+		    build_skill_manifest,
+		    format_manifest_for_context,
 		)
 
 		# Empty manifest still produces a valid context string
@@ -678,8 +662,8 @@ class TestChallengerSkillManifestAlignment:
 	def test_disabled_skills_from_challenger_directory(self):
 		"""discover_hidden_skills produces a list (possibly empty) for challenger dir."""
 		from secret_validator_grunt.core.skills import (
-			discover_hidden_skills,
-			CHALLENGER_SKILLS_DIRECTORY,
+		    discover_hidden_skills,
+		    CHALLENGER_SKILLS_DIRECTORY,
 		)
 
 		hidden = discover_hidden_skills(CHALLENGER_SKILLS_DIRECTORY)
@@ -728,8 +712,8 @@ class TestDiscoverChallengerSkillDirectories:
 	def test_default_directory_exists(self):
 		"""Default challenger skills directory exists and is returned."""
 		from secret_validator_grunt.core.skills import (
-			discover_challenger_skill_directories,
-			CHALLENGER_SKILLS_DIRECTORY,
+		    discover_challenger_skill_directories,
+		    CHALLENGER_SKILLS_DIRECTORY,
 		)
 		assert CHALLENGER_SKILLS_DIRECTORY.exists()
 		dirs = discover_challenger_skill_directories()
@@ -749,7 +733,8 @@ class TestDiscoverChallengerSkillDirectories:
 		"""Non-existent directories are filtered out."""
 		from secret_validator_grunt.core.skills import discover_challenger_skill_directories
 
-		dirs = discover_challenger_skill_directories(["/nonexistent/path/skills"])
+		dirs = discover_challenger_skill_directories(
+		    ["/nonexistent/path/skills"])
 		# Should only have default, not the nonexistent path
 		assert "/nonexistent/path/skills" not in dirs
 
@@ -802,16 +787,16 @@ class TestFormatReportsWithChallenge:
 		from secret_validator_grunt.models.run_result import AgentRunResult
 
 		results = [
-			AgentRunResult(
-				run_id="0",
-				raw_markdown="# Report 0\nContent here",
-				progress_log=[],
-			),
-			AgentRunResult(
-				run_id="1",
-				raw_markdown="# Report 1\nMore content",
-				progress_log=[],
-			),
+		    AgentRunResult(
+		        run_id="0",
+		        raw_markdown="# Report 0\nContent here",
+		        progress_log=[],
+		    ),
+		    AgentRunResult(
+		        run_id="1",
+		        raw_markdown="# Report 1\nMore content",
+		        progress_log=[],
+		    ),
 		]
 		output = _format_reports(results)
 		assert "REPORT 0:" in output
@@ -825,16 +810,16 @@ class TestFormatReportsWithChallenge:
 		from secret_validator_grunt.models.challenge_result import ChallengeResult
 
 		results = [
-			AgentRunResult(
-				run_id="0",
-				raw_markdown="# Report 0",
-				progress_log=[],
-				challenge_result=ChallengeResult(
-					verdict="CONFIRMED",
-					reasoning="Verified via API call",
-					evidence_gaps=[],
-				),
-			),
+		    AgentRunResult(
+		        run_id="0",
+		        raw_markdown="# Report 0",
+		        progress_log=[],
+		        challenge_result=ChallengeResult(
+		            verdict="CONFIRMED",
+		            reasoning="Verified via API call",
+		            evidence_gaps=[],
+		        ),
+		    ),
 		]
 		output = _format_reports(results)
 		assert "--- ADVERSARIAL CHALLENGE RESULT ---" in output
@@ -849,16 +834,16 @@ class TestFormatReportsWithChallenge:
 		from secret_validator_grunt.models.challenge_result import ChallengeResult
 
 		results = [
-			AgentRunResult(
-				run_id="0",
-				raw_markdown="# Report 0",
-				progress_log=[],
-				challenge_result=ChallengeResult(
-					verdict="REFUTED",
-					reasoning="Missing evidence",
-					evidence_gaps=["No API logs", "No rotation check"],
-				),
-			),
+		    AgentRunResult(
+		        run_id="0",
+		        raw_markdown="# Report 0",
+		        progress_log=[],
+		        challenge_result=ChallengeResult(
+		            verdict="REFUTED",
+		            reasoning="Missing evidence",
+		            evidence_gaps=["No API logs", "No rotation check"],
+		        ),
+		    ),
 		]
 		output = _format_reports(results)
 		assert "Evidence Gaps: No API logs, No rotation check" in output
@@ -870,16 +855,16 @@ class TestFormatReportsWithChallenge:
 		from secret_validator_grunt.models.challenge_result import ChallengeResult
 
 		results = [
-			AgentRunResult(
-				run_id="0",
-				raw_markdown="# Report 0",
-				progress_log=[],
-				challenge_result=ChallengeResult(
-					verdict="REFUTED",
-					reasoning="Found revoked key",
-					contradicting_evidence=["Key rotated 2023-01-01"],
-				),
-			),
+		    AgentRunResult(
+		        run_id="0",
+		        raw_markdown="# Report 0",
+		        progress_log=[],
+		        challenge_result=ChallengeResult(
+		            verdict="REFUTED",
+		            reasoning="Found revoked key",
+		            contradicting_evidence=["Key rotated 2023-01-01"],
+		        ),
+		    ),
 		]
 		output = _format_reports(results)
 		assert "Contradicting Evidence: Key rotated 2023-01-01" in output
@@ -891,21 +876,21 @@ class TestFormatReportsWithChallenge:
 		from secret_validator_grunt.models.challenge_result import ChallengeResult
 
 		results = [
-			AgentRunResult(
-				run_id="0",
-				raw_markdown="# Report 0",
-				progress_log=[],
-				challenge_result=ChallengeResult(
-					verdict="CONFIRMED",
-					reasoning="Verified",
-				),
-			),
-			AgentRunResult(
-				run_id="1",
-				raw_markdown="# Report 1",
-				progress_log=[],
-				# No challenge_result
-			),
+		    AgentRunResult(
+		        run_id="0",
+		        raw_markdown="# Report 0",
+		        progress_log=[],
+		        challenge_result=ChallengeResult(
+		            verdict="CONFIRMED",
+		            reasoning="Verified",
+		        ),
+		    ),
+		    AgentRunResult(
+		        run_id="1",
+		        raw_markdown="# Report 1",
+		        progress_log=[],
+		        # No challenge_result
+		    ),
 		]
 		output = _format_reports(results)
 		# First report has challenge
@@ -967,11 +952,8 @@ class TestTUIRunDisplayStateChallenge:
 		"""render_cell shows CONFIRMED verdict in red."""
 		from secret_validator_grunt.ui.tui import RunDisplayState
 
-		state = RunDisplayState(
-			run_id="0",
-			status="completed",
-			challenge_verdict="CONFIRMED"
-		)
+		state = RunDisplayState(run_id="0", status="completed",
+		                        challenge_verdict="CONFIRMED")
 		cell = state.render_cell()
 		assert "challenge: CONFIRMED" in cell.plain
 
@@ -979,11 +961,8 @@ class TestTUIRunDisplayStateChallenge:
 		"""render_cell shows REFUTED verdict in green."""
 		from secret_validator_grunt.ui.tui import RunDisplayState
 
-		state = RunDisplayState(
-			run_id="0",
-			status="completed",
-			challenge_verdict="REFUTED"
-		)
+		state = RunDisplayState(run_id="0", status="completed",
+		                        challenge_verdict="REFUTED")
 		cell = state.render_cell()
 		assert "challenge: REFUTED" in cell.plain
 
@@ -991,11 +970,8 @@ class TestTUIRunDisplayStateChallenge:
 		"""render_cell shows INSUFFICIENT_EVIDENCE verdict in yellow."""
 		from secret_validator_grunt.ui.tui import RunDisplayState
 
-		state = RunDisplayState(
-			run_id="0",
-			status="completed",
-			challenge_verdict="INSUFFICIENT_EVIDENCE"
-		)
+		state = RunDisplayState(run_id="0", status="completed",
+		                        challenge_verdict="INSUFFICIENT_EVIDENCE")
 		cell = state.render_cell()
 		assert "challenge: INSUFFICIENT_EVIDENCE" in cell.plain
 
@@ -1052,13 +1028,13 @@ class TestChallengerStreamLogPath:
 		org_repo_slug = rp.org_repo.replace("/", "_")
 
 		names = [
-			f"challenge-{i}-{org_repo_slug}-{rp.alert_id}.stream.log"
-			for i in range(3)
+		    f"challenge-{i}-{org_repo_slug}-{rp.alert_id}.stream.log"
+		    for i in range(3)
 		]
 		assert names == [
-			"challenge-0-acme_app-42.stream.log",
-			"challenge-1-acme_app-42.stream.log",
-			"challenge-2-acme_app-42.stream.log",
+		    "challenge-0-acme_app-42.stream.log",
+		    "challenge-1-acme_app-42.stream.log",
+		    "challenge-2-acme_app-42.stream.log",
 		]
 
 
@@ -1073,11 +1049,12 @@ class TestBuildChallengePromptSkillManifest:
 		template = "Report: {{report_markdown}}\nWorkspace: {{workspace_path}}"
 		rp = RunParams(org_repo="org/repo", alert_id="1")
 		result = build_challenge_prompt(
-			report_markdown="# Report",
-			workspace_path="/ws",
-			prompt_template=template,
-			run_params=rp,
-			skill_manifest_context="## Available Skills\n\n- skill_a\n- skill_b",
+		    report_markdown="# Report",
+		    workspace_path="/ws",
+		    prompt_template=template,
+		    run_params=rp,
+		    skill_manifest_context=
+		    "## Available Skills\n\n- skill_a\n- skill_b",
 		)
 		assert "## Available Skills" in result
 		assert "skill_a" in result
@@ -1091,11 +1068,11 @@ class TestBuildChallengePromptSkillManifest:
 		template = "Report: {{report_markdown}}"
 		rp = RunParams(org_repo="org/repo", alert_id="1")
 		result = build_challenge_prompt(
-			report_markdown="# Report",
-			workspace_path="/ws",
-			prompt_template=template,
-			run_params=rp,
-			skill_manifest_context=None,
+		    report_markdown="# Report",
+		    workspace_path="/ws",
+		    prompt_template=template,
+		    run_params=rp,
+		    skill_manifest_context=None,
 		)
 		assert result == "Report: # Report"
 
@@ -1107,11 +1084,11 @@ class TestBuildChallengePromptSkillManifest:
 		template = "Base prompt"
 		rp = RunParams(org_repo="org/repo", alert_id="1")
 		result = build_challenge_prompt(
-			report_markdown="",
-			workspace_path="/ws",
-			prompt_template=template,
-			run_params=rp,
-			skill_manifest_context="Skills here",
+		    report_markdown="",
+		    workspace_path="/ws",
+		    prompt_template=template,
+		    run_params=rp,
+		    skill_manifest_context="Skills here",
 		)
 		assert "\n\n" in result
 		assert "Base prompt\n\nSkills here" in result

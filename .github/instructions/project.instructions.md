@@ -214,7 +214,8 @@ Do NOT use overlapping ranges or dict-based lookups for boundaries — use expli
 | `MAX_CONTINUATION_ATTEMPTS` | 2 | Max continuation prompts per session |
 | `MIN_RESPONSE_LENGTH` | 500 | Minimum response length before triggering continuation |
 | `SHOW_USAGE` | false | Enable diagnostics display and persistence |
-| `GITHUB_TOKEN` | None | GitHub API authentication |
+| `GITHUB_TOKEN` | None | GitHub API authentication and git clone auth |
+| `COPILOT_TOKEN` | None | Copilot CLI authentication (falls back to GITHUB_TOKEN) |
 | `STREAM_VERBOSE` | false | Stream raw deltas to console |
 | `OUTPUT_DIR` | analysis | Base output directory |
 

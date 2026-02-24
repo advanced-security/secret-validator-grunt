@@ -160,39 +160,37 @@ def test_tui_usage_table_includes_challenger_rows():
 	"""Usage table includes challenger rows when present."""
 	from secret_validator_grunt.models.usage import UsageStats
 	from secret_validator_grunt.models.challenge_result import (
-		ChallengeResult,
-	)
+	    ChallengeResult, )
 
 	ui = TUI(analysis_count=2)
 	cr = ChallengeResult(
-		verdict="CONFIRMED",
-		usage=UsageStats(
-			input_tokens=1000,
-			output_tokens=200,
-			cost=5,
-			duration=10.0,
-		),
+	    verdict="CONFIRMED",
+	    usage=UsageStats(
+	        input_tokens=1000,
+	        output_tokens=200,
+	        cost=5,
+	        duration=10.0,
+	    ),
 	)
 	results = [
-		AgentRunResult(
-			run_id="0",
-			progress_log=[],
-			usage=UsageStats(
-				input_tokens=5000,
-				output_tokens=500,
-				cost=10,
-				duration=30.0,
-			),
-			challenge_result=cr,
-		),
+	    AgentRunResult(
+	        run_id="0",
+	        progress_log=[],
+	        usage=UsageStats(
+	            input_tokens=5000,
+	            output_tokens=500,
+	            cost=10,
+	            duration=30.0,
+	        ),
+	        challenge_result=cr,
+	    ),
 	]
 	table = ui._render_usage_table(results, None)
 	# Should have: run 0, challenge 0, total = 3 rows
 	assert table.row_count == 3
 	# First row is the analysis, second is challenger
 	row_labels = [
-		str(table.columns[0]._cells[i])
-		for i in range(table.row_count)
+	    str(table.columns[0]._cells[i]) for i in range(table.row_count)
 	]
 	assert "run 0" in row_labels
 	assert "challenge 0" in row_labels
@@ -205,23 +203,22 @@ def test_tui_usage_table_no_challenger_when_absent():
 
 	ui = TUI(analysis_count=1)
 	results = [
-		AgentRunResult(
-			run_id="0",
-			progress_log=[],
-			usage=UsageStats(
-				input_tokens=100,
-				output_tokens=10,
-				cost=1,
-				duration=5.0,
-			),
-		),
+	    AgentRunResult(
+	        run_id="0",
+	        progress_log=[],
+	        usage=UsageStats(
+	            input_tokens=100,
+	            output_tokens=10,
+	            cost=1,
+	            duration=5.0,
+	        ),
+	    ),
 	]
 	table = ui._render_usage_table(results, None)
 	# Only run 0 + total = 2 rows
 	assert table.row_count == 2
 	row_labels = [
-		str(table.columns[0]._cells[i])
-		for i in range(table.row_count)
+	    str(table.columns[0]._cells[i]) for i in range(table.row_count)
 	]
 	assert "challenge 0" not in row_labels
 
@@ -230,27 +227,26 @@ def test_tui_usage_table_challenger_in_totals():
 	"""Challenger usage is included in the total row."""
 	from secret_validator_grunt.models.usage import UsageStats
 	from secret_validator_grunt.models.challenge_result import (
-		ChallengeResult,
-	)
+	    ChallengeResult, )
 
 	ui = TUI(analysis_count=1)
 	cr = ChallengeResult(
-		verdict="CONFIRMED",
-		usage=UsageStats(
-			input_tokens=1000,
-			output_tokens=200,
-		),
+	    verdict="CONFIRMED",
+	    usage=UsageStats(
+	        input_tokens=1000,
+	        output_tokens=200,
+	    ),
 	)
 	results = [
-		AgentRunResult(
-			run_id="0",
-			progress_log=[],
-			usage=UsageStats(
-				input_tokens=2000,
-				output_tokens=400,
-			),
-			challenge_result=cr,
-		),
+	    AgentRunResult(
+	        run_id="0",
+	        progress_log=[],
+	        usage=UsageStats(
+	            input_tokens=2000,
+	            output_tokens=400,
+	        ),
+	        challenge_result=cr,
+	    ),
 	]
 	table = ui._render_usage_table(results, None)
 	# Total row should sum analysis + challenger
@@ -404,36 +400,34 @@ class TestTUIChallengerTable:
 def test_tui_skill_usage_table_includes_challenger_rows():
 	"""Skill usage table includes challenger rows when present."""
 	from secret_validator_grunt.models.challenge_result import (
-		ChallengeResult,
-	)
+	    ChallengeResult, )
 
 	ui = TUI(analysis_count=1)
 	cr = ChallengeResult(
-		verdict="CONFIRMED",
-		skill_usage=SkillUsageStats(
-			available_skills=["x", "y"],
-			required_skills=["x"],
-			loaded_skills=["x", "y"],
-		),
+	    verdict="CONFIRMED",
+	    skill_usage=SkillUsageStats(
+	        available_skills=["x", "y"],
+	        required_skills=["x"],
+	        loaded_skills=["x", "y"],
+	    ),
 	)
 	results = [
-		AgentRunResult(
-			run_id="0",
-			progress_log=[],
-			skill_usage=SkillUsageStats(
-				available_skills=["a", "b"],
-				required_skills=["a"],
-				loaded_skills=["a"],
-			),
-			challenge_result=cr,
-		),
+	    AgentRunResult(
+	        run_id="0",
+	        progress_log=[],
+	        skill_usage=SkillUsageStats(
+	            available_skills=["a", "b"],
+	            required_skills=["a"],
+	            loaded_skills=["a"],
+	        ),
+	        challenge_result=cr,
+	    ),
 	]
 	table = ui._render_skill_usage_table(results)
 	# Should have: run 0 + challenge 0 = 2 rows
 	assert table.row_count == 2
 	row_labels = [
-		str(table.columns[0]._cells[i])
-		for i in range(table.row_count)
+	    str(table.columns[0]._cells[i]) for i in range(table.row_count)
 	]
 	assert "run 0" in row_labels
 	assert "challenge 0" in row_labels
@@ -443,21 +437,20 @@ def test_tui_skill_usage_table_no_challenger_when_absent():
 	"""Skill usage table has no challenger rows without challenge."""
 	ui = TUI(analysis_count=1)
 	results = [
-		AgentRunResult(
-			run_id="0",
-			progress_log=[],
-			skill_usage=SkillUsageStats(
-				available_skills=["a"],
-				required_skills=["a"],
-				loaded_skills=["a"],
-			),
-		),
+	    AgentRunResult(
+	        run_id="0",
+	        progress_log=[],
+	        skill_usage=SkillUsageStats(
+	            available_skills=["a"],
+	            required_skills=["a"],
+	            loaded_skills=["a"],
+	        ),
+	    ),
 	]
 	table = ui._render_skill_usage_table(results)
 	assert table.row_count == 1
 	row_labels = [
-		str(table.columns[0]._cells[i])
-		for i in range(table.row_count)
+	    str(table.columns[0]._cells[i]) for i in range(table.row_count)
 	]
 	assert "challenge 0" not in row_labels
 
@@ -465,22 +458,21 @@ def test_tui_skill_usage_table_no_challenger_when_absent():
 def test_tui_skill_usage_table_challenger_no_skill_usage():
 	"""Challenger with no skill_usage doesn't add a row."""
 	from secret_validator_grunt.models.challenge_result import (
-		ChallengeResult,
-	)
+	    ChallengeResult, )
 
 	ui = TUI(analysis_count=1)
 	cr = ChallengeResult(verdict="CONFIRMED", skill_usage=None)
 	results = [
-		AgentRunResult(
-			run_id="0",
-			progress_log=[],
-			skill_usage=SkillUsageStats(
-				available_skills=["a"],
-				required_skills=["a"],
-				loaded_skills=["a"],
-			),
-			challenge_result=cr,
-		),
+	    AgentRunResult(
+	        run_id="0",
+	        progress_log=[],
+	        skill_usage=SkillUsageStats(
+	            available_skills=["a"],
+	            required_skills=["a"],
+	            loaded_skills=["a"],
+	        ),
+	        challenge_result=cr,
+	    ),
 	]
 	table = ui._render_skill_usage_table(results)
 	assert table.row_count == 1
@@ -489,8 +481,7 @@ def test_tui_skill_usage_table_challenger_no_skill_usage():
 def test_tui_tool_usage_table_includes_challenger_rows():
 	"""Tool usage table includes challenger rows when present."""
 	from secret_validator_grunt.models.challenge_result import (
-		ChallengeResult,
-	)
+	    ChallengeResult, )
 
 	ui = TUI(analysis_count=1)
 	challenger_tools = ToolUsageStats()
@@ -498,8 +489,8 @@ def test_tui_tool_usage_table_includes_challenger_rows():
 	challenger_tools.add_complete("c1", success=True)
 
 	cr = ChallengeResult(
-		verdict="CONFIRMED",
-		tool_usage=challenger_tools,
+	    verdict="CONFIRMED",
+	    tool_usage=challenger_tools,
 	)
 
 	analysis_tools = ToolUsageStats()
@@ -507,19 +498,18 @@ def test_tui_tool_usage_table_includes_challenger_rows():
 	analysis_tools.add_complete("c2", success=True)
 
 	results = [
-		AgentRunResult(
-			run_id="0",
-			progress_log=[],
-			tool_usage=analysis_tools,
-			challenge_result=cr,
-		),
+	    AgentRunResult(
+	        run_id="0",
+	        progress_log=[],
+	        tool_usage=analysis_tools,
+	        challenge_result=cr,
+	    ),
 	]
 	table = ui._render_tool_usage_table(results)
 	# Should have: run 0 + challenge 0 = 2 rows
 	assert table.row_count == 2
 	row_labels = [
-		str(table.columns[0]._cells[i])
-		for i in range(table.row_count)
+	    str(table.columns[0]._cells[i]) for i in range(table.row_count)
 	]
 	assert "run 0" in row_labels
 	assert "challenge 0" in row_labels
@@ -533,7 +523,7 @@ def test_tui_tool_usage_table_no_challenger_when_absent():
 	stats.add_complete("c1", success=True)
 
 	results = [
-		AgentRunResult(run_id="0", progress_log=[], tool_usage=stats),
+	    AgentRunResult(run_id="0", progress_log=[], tool_usage=stats),
 	]
 	table = ui._render_tool_usage_table(results)
 	assert table.row_count == 1
@@ -542,8 +532,7 @@ def test_tui_tool_usage_table_no_challenger_when_absent():
 def test_tui_tool_usage_table_challenger_no_tool_usage():
 	"""Challenger with no tool_usage doesn't add a row."""
 	from secret_validator_grunt.models.challenge_result import (
-		ChallengeResult,
-	)
+	    ChallengeResult, )
 
 	ui = TUI(analysis_count=1)
 	cr = ChallengeResult(verdict="CONFIRMED", tool_usage=None)
@@ -552,12 +541,12 @@ def test_tui_tool_usage_table_challenger_no_tool_usage():
 	stats.add_complete("c1", success=True)
 
 	results = [
-		AgentRunResult(
-			run_id="0",
-			progress_log=[],
-			tool_usage=stats,
-			challenge_result=cr,
-		),
+	    AgentRunResult(
+	        run_id="0",
+	        progress_log=[],
+	        tool_usage=stats,
+	        challenge_result=cr,
+	    ),
 	]
 	table = ui._render_tool_usage_table(results)
 	assert table.row_count == 1

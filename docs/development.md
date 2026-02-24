@@ -5,7 +5,7 @@
 ```bash
 uv venv
 uv sync --extra dev
-cp .env.example .env   # Set COPILOT_CLI_URL, GITHUB_TOKEN, etc.
+cp .env.example .env   # Set GITHUB_TOKEN, COPILOT_TOKEN (optional), etc.
 ```
 
 ## Running

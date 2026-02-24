@@ -42,9 +42,8 @@ class TestNormalizeHeading:
 
 	def test_numbered_equals_plain(self):
 		"""Numbered and plain versions normalize identically."""
-		assert (
-		    normalize_heading("2. Locations")
-		    == normalize_heading("Locations"))
+		assert (normalize_heading("2. Locations") == normalize_heading(
+		    "Locations"))
 
 	def test_no_space_after_dot(self):
 		"""Prefix like '3.Context' is still stripped."""
@@ -57,8 +56,7 @@ class TestNormalizeHeading:
 
 	def test_no_prefix(self):
 		"""Heading without numeric prefix is unchanged."""
-		assert normalize_heading("Executive Summary") == (
-		    "executive summary")
+		assert normalize_heading("Executive Summary") == ("executive summary")
 
 	def test_only_number_dot(self):
 		"""Heading that is just a number-dot normalizes to empty."""
@@ -84,8 +82,7 @@ class TestNormalizeHeading:
 		    ("9. Verdict", "Verdict"),
 		]
 		for numbered, plain in pairs:
-			assert normalize_heading(numbered) == (
-			    normalize_heading(plain)), (
+			assert normalize_heading(numbered) == (normalize_heading(plain)), (
 			    f"{numbered!r} != {plain!r}")
 
 
@@ -100,25 +97,20 @@ class TestExtractSection:
 	def test_unnumbered_heading(self):
 		"""Extract section with plain heading."""
 		md = "## Locations\n\nSome content\n"
-		assert extract_section(md, "Locations") == (
-		    "Some content")
+		assert extract_section(md, "Locations") == ("Some content")
 
 	def test_numbered_heading(self):
 		"""Extract section with numbered heading."""
 		md = "## 2. Locations\n\nSome content\n"
-		assert extract_section(md, "Locations") == (
-		    "Some content")
+		assert extract_section(md, "Locations") == ("Some content")
 
 	def test_table_from_numbered_section(self):
 		"""Extract table from numbered section heading."""
-		md = (
-		    "## 8. Risk Assessment\n\n"
-		    "| Risk Factor | Assessment |\n"
-		    "| ----------- | ---------- |\n"
-		    "| Exploit     | High       |\n"
-		)
-		table = extract_table_from_section(
-		    md, "Risk Assessment")
+		md = ("## 8. Risk Assessment\n\n"
+		      "| Risk Factor | Assessment |\n"
+		      "| ----------- | ---------- |\n"
+		      "| Exploit     | High       |\n")
+		table = extract_table_from_section(md, "Risk Assessment")
 		assert table is not None
 		assert len(table) == 1
 		assert table[0]["Risk Factor"] == "Exploit"

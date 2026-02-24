@@ -12,18 +12,18 @@ from pydantic import ValidationError
 from secret_validator_grunt.models.report import Report
 from secret_validator_grunt.models.eval_result import EvalCheck, EvalResult
 from secret_validator_grunt.evals.checks import (
-	run_all_checks,
-	has_required_sections,
-	valid_verdict,
-	valid_confidence_score,
-	confidence_label_matches_score,
-	metadata_complete,
-	has_key_finding,
-	has_verification_tests,
-	has_code_evidence,
-	verdict_confidence_coherent,
-	score_to_label,
-	VALID_VERDICTS,
+    run_all_checks,
+    has_required_sections,
+    valid_verdict,
+    valid_confidence_score,
+    confidence_label_matches_score,
+    metadata_complete,
+    has_key_finding,
+    has_verification_tests,
+    has_code_evidence,
+    verdict_confidence_coherent,
+    score_to_label,
+    VALID_VERDICTS,
 )
 
 # ---------------------------------------------------------------------------
@@ -33,9 +33,7 @@ from secret_validator_grunt.evals.checks import (
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "reports"
 
 
-def _load_fixture(
-	name: str,
-) -> tuple[str, dict[str, Any]]:
+def _load_fixture(name: str, ) -> tuple[str, dict[str, Any]]:
 	"""Load a fixture markdown + metadata JSON by base name."""
 	md_path = FIXTURES_DIR / f"{name}.md"
 	json_path = FIXTURES_DIR / f"{name}.json"
@@ -47,9 +45,9 @@ def _load_fixture(
 def _list_good_fixtures() -> list[str]:
 	"""Return base names of fixtures expected to pass all checks."""
 	return [
-		p.stem for p in FIXTURES_DIR.glob("*.json")
-		if not p.stem.startswith("bad-")
-		and json.loads(p.read_text()).get("expect_pass") is not False
+	    p.stem for p in FIXTURES_DIR.glob("*.json")
+	    if not p.stem.startswith("bad-")
+	    and json.loads(p.read_text()).get("expect_pass") is not False
 	]
 
 
@@ -124,7 +122,6 @@ Some context about the secret.
 
 EMPTY_REPORT = Report()
 
-
 # ---------------------------------------------------------------------------
 # EvalCheck / EvalResult model tests
 # ---------------------------------------------------------------------------
@@ -142,8 +139,10 @@ class TestEvalCheckModel:
 	def test_all_fields(self):
 		"""All fields round-trip correctly."""
 		c = EvalCheck(
-			name="x", passed=False,
-			message="bad", severity="warning",
+		    name="x",
+		    passed=False,
+		    message="bad",
+		    severity="warning",
 		)
 		assert c.name == "x"
 		assert c.passed is False
@@ -154,7 +153,9 @@ class TestEvalCheckModel:
 		"""Invalid severity value is rejected by Pydantic."""
 		with pytest.raises(ValidationError):
 			EvalCheck(
-				name="x", passed=True, severity="critical",
+			    name="x",
+			    passed=True,
+			    severity="critical",
 			)
 
 
@@ -164,57 +165,59 @@ class TestEvalResultModel:
 	def test_passed_all_ok(self):
 		"""Passed is True when all error-severity checks pass."""
 		result = EvalResult(
-			report_id="r1",
-			checks=[
-				EvalCheck(name="a", passed=True),
-				EvalCheck(name="b", passed=True),
-			],
+		    report_id="r1",
+		    checks=[
+		        EvalCheck(name="a", passed=True),
+		        EvalCheck(name="b", passed=True),
+		    ],
 		)
 		assert result.passed is True
 
 	def test_passed_ignores_warnings(self):
 		"""Passed ignores failed warning-severity checks."""
 		result = EvalResult(
-			report_id="r1",
-			checks=[
-				EvalCheck(name="a", passed=True),
-				EvalCheck(
-					name="b", passed=False, severity="warning",
-				),
-			],
+		    report_id="r1",
+		    checks=[
+		        EvalCheck(name="a", passed=True),
+		        EvalCheck(
+		            name="b",
+		            passed=False,
+		            severity="warning",
+		        ),
+		    ],
 		)
 		assert result.passed is True
 
 	def test_passed_fails_on_error(self):
 		"""Passed is False when any error-severity check fails."""
 		result = EvalResult(
-			report_id="r1",
-			checks=[
-				EvalCheck(name="a", passed=True),
-				EvalCheck(name="b", passed=False),
-			],
+		    report_id="r1",
+		    checks=[
+		        EvalCheck(name="a", passed=True),
+		        EvalCheck(name="b", passed=False),
+		    ],
 		)
 		assert result.passed is False
 
 	def test_score_all_pass(self):
 		"""Score is 1.0 when all checks pass."""
 		result = EvalResult(
-			report_id="r1",
-			checks=[
-				EvalCheck(name="a", passed=True),
-				EvalCheck(name="b", passed=True),
-			],
+		    report_id="r1",
+		    checks=[
+		        EvalCheck(name="a", passed=True),
+		        EvalCheck(name="b", passed=True),
+		    ],
 		)
 		assert result.score == 1.0
 
 	def test_score_half_pass(self):
 		"""Score is 0.5 when half the checks pass."""
 		result = EvalResult(
-			report_id="r1",
-			checks=[
-				EvalCheck(name="a", passed=True),
-				EvalCheck(name="b", passed=False),
-			],
+		    report_id="r1",
+		    checks=[
+		        EvalCheck(name="a", passed=True),
+		        EvalCheck(name="b", passed=False),
+		    ],
 		)
 		assert result.score == 0.5
 
@@ -333,7 +336,8 @@ class TestConfidenceLabelMatchesScore:
 	def test_medium_match(self):
 		"""Medium label with score 4-6.9 passes."""
 		report = Report(
-			confidence_score=5.5, confidence_label="Medium",
+		    confidence_score=5.5,
+		    confidence_label="Medium",
 		)
 		c = confidence_label_matches_score(report)
 		assert c.passed is True
@@ -347,7 +351,8 @@ class TestConfidenceLabelMatchesScore:
 	def test_mismatch(self):
 		"""Wrong label for score fails."""
 		report = Report(
-			confidence_score=8.0, confidence_label="Low",
+		    confidence_score=8.0,
+		    confidence_label="Low",
 		)
 		c = confidence_label_matches_score(report)
 		assert c.passed is False
@@ -361,7 +366,8 @@ class TestConfidenceLabelMatchesScore:
 	def test_boundary_7(self):
 		"""Score exactly 7.0 should be High."""
 		report = Report(
-			confidence_score=7.0, confidence_label="High",
+		    confidence_score=7.0,
+		    confidence_label="High",
 		)
 		c = confidence_label_matches_score(report)
 		assert c.passed is True
@@ -369,7 +375,8 @@ class TestConfidenceLabelMatchesScore:
 	def test_boundary_4(self):
 		"""Score exactly 4.0 should be Medium."""
 		report = Report(
-			confidence_score=4.0, confidence_label="Medium",
+		    confidence_score=4.0,
+		    confidence_label="Medium",
 		)
 		c = confidence_label_matches_score(report)
 		assert c.passed is True
@@ -377,7 +384,8 @@ class TestConfidenceLabelMatchesScore:
 	def test_boundary_6_99_is_medium(self):
 		"""Score 6.99 should be Medium, not High."""
 		report = Report(
-			confidence_score=6.99, confidence_label="Medium",
+		    confidence_score=6.99,
+		    confidence_label="Medium",
 		)
 		c = confidence_label_matches_score(report)
 		assert c.passed is True
@@ -385,7 +393,8 @@ class TestConfidenceLabelMatchesScore:
 	def test_boundary_6_99_not_high(self):
 		"""Score 6.99 labelled High should fail."""
 		report = Report(
-			confidence_score=6.99, confidence_label="High",
+		    confidence_score=6.99,
+		    confidence_label="High",
 		)
 		c = confidence_label_matches_score(report)
 		assert c.passed is False
@@ -393,7 +402,8 @@ class TestConfidenceLabelMatchesScore:
 	def test_boundary_3_99_is_low(self):
 		"""Score 3.99 should be Low, not Medium."""
 		report = Report(
-			confidence_score=3.99, confidence_label="Low",
+		    confidence_score=3.99,
+		    confidence_label="Low",
 		)
 		c = confidence_label_matches_score(report)
 		assert c.passed is True
@@ -403,12 +413,12 @@ class TestScoreToLabel:
 	"""Test the score_to_label helper directly."""
 
 	@pytest.mark.parametrize("score,expected", [
-		(0.0, "low"),
-		(3.99, "low"),
-		(4.0, "medium"),
-		(6.99, "medium"),
-		(7.0, "high"),
-		(10.0, "high"),
+	    (0.0, "low"),
+	    (3.99, "low"),
+	    (4.0, "medium"),
+	    (6.99, "medium"),
+	    (7.0, "high"),
+	    (10.0, "high"),
 	])
 	def test_boundary_mapping(self, score, expected):
 		"""Boundary scores map to the correct label."""
@@ -429,10 +439,10 @@ class TestMetadataComplete:
 	def test_complete(self):
 		"""Report with all metadata passes."""
 		report = Report(
-			repository="org/repo",
-			alert_id="1",
-			secret_type="token",
-			report_date="2026-01-01",
+		    repository="org/repo",
+		    alert_id="1",
+		    secret_type="token",
+		    report_date="2026-01-01",
 		)
 		c = metadata_complete(report)
 		assert c.passed is True
@@ -477,9 +487,10 @@ class TestHasVerificationTests:
 
 	def test_with_table(self):
 		"""Report with verification_tests table passes."""
-		report = Report(
-			verification_tests=[{"test": "check", "result": "ok"}],
-		)
+		report = Report(verification_tests=[{
+		    "test": "check",
+		    "result": "ok"
+		}], )
 		c = has_verification_tests(report)
 		assert c.passed is True
 		assert c.severity == "warning"
@@ -509,9 +520,7 @@ class TestHasCodeEvidence:
 
 	def test_with_code_blocks(self):
 		"""Report markdown with fenced code blocks passes."""
-		report = Report(
-			raw_markdown="```python\nprint('hi')\n```",
-		)
+		report = Report(raw_markdown="```python\nprint('hi')\n```", )
 		c = has_code_evidence(report)
 		assert c.passed is True
 
@@ -547,7 +556,8 @@ class TestVerdictConfidenceCoherent:
 	def test_true_positive_high_confidence(self):
 		"""TRUE_POSITIVE with high confidence is coherent."""
 		report = Report(
-			verdict="TRUE_POSITIVE", confidence_score=9.0,
+		    verdict="TRUE_POSITIVE",
+		    confidence_score=9.0,
 		)
 		c = verdict_confidence_coherent(report)
 		assert c.passed is True
@@ -555,7 +565,8 @@ class TestVerdictConfidenceCoherent:
 	def test_false_positive_high_confidence(self):
 		"""FALSE_POSITIVE with high confidence is coherent."""
 		report = Report(
-			verdict="FALSE_POSITIVE", confidence_score=8.5,
+		    verdict="FALSE_POSITIVE",
+		    confidence_score=8.5,
 		)
 		c = verdict_confidence_coherent(report)
 		assert c.passed is True
@@ -563,7 +574,8 @@ class TestVerdictConfidenceCoherent:
 	def test_inconclusive_low_confidence(self):
 		"""INCONCLUSIVE with low confidence is coherent."""
 		report = Report(
-			verdict="INCONCLUSIVE", confidence_score=3.0,
+		    verdict="INCONCLUSIVE",
+		    confidence_score=3.0,
 		)
 		c = verdict_confidence_coherent(report)
 		assert c.passed is True
@@ -571,7 +583,8 @@ class TestVerdictConfidenceCoherent:
 	def test_inconclusive_medium_confidence(self):
 		"""INCONCLUSIVE with medium confidence is coherent."""
 		report = Report(
-			verdict="INCONCLUSIVE", confidence_score=5.0,
+		    verdict="INCONCLUSIVE",
+		    confidence_score=5.0,
 		)
 		c = verdict_confidence_coherent(report)
 		assert c.passed is True
@@ -579,7 +592,8 @@ class TestVerdictConfidenceCoherent:
 	def test_inconclusive_high_confidence(self):
 		"""INCONCLUSIVE with high confidence is incoherent."""
 		report = Report(
-			verdict="INCONCLUSIVE", confidence_score=8.0,
+		    verdict="INCONCLUSIVE",
+		    confidence_score=8.0,
 		)
 		c = verdict_confidence_coherent(report)
 		assert c.passed is False
@@ -608,13 +622,10 @@ class TestRunAllChecks:
 		assert len(result.checks) == 9
 		# All error-severity checks should pass
 		errors = [
-			c for c in result.checks
-			if c.severity == "error" and not c.passed
+		    c for c in result.checks if c.severity == "error" and not c.passed
 		]
-		assert errors == [], (
-			f"Failed error checks: "
-			f"{[c.name for c in errors]}"
-		)
+		assert errors == [], (f"Failed error checks: "
+		                      f"{[c.name for c in errors]}")
 
 	def test_empty_report_fails(self):
 		"""Empty report fails multiple checks."""
@@ -653,13 +664,10 @@ class TestFixtureReports:
 		result = run_all_checks(report, report_id=fixture_name)
 		# All error-severity checks should pass
 		errors = [
-			c for c in result.checks
-			if c.severity == "error" and not c.passed
+		    c for c in result.checks if c.severity == "error" and not c.passed
 		]
-		assert errors == [], (
-			f"Fixture {fixture_name} failed error checks: "
-			f"{[(c.name, c.message) for c in errors]}"
-		)
+		assert errors == [], (f"Fixture {fixture_name} failed error checks: "
+		                      f"{[(c.name, c.message) for c in errors]}")
 
 	@pytest.mark.parametrize("fixture_name", _list_good_fixtures())
 	def test_good_fixture_verdict_matches(self, fixture_name):
@@ -669,9 +677,8 @@ class TestFixtureReports:
 		expected_verdict = meta.get("verdict")
 		if expected_verdict:
 			assert report.verdict == expected_verdict, (
-				f"Expected verdict {expected_verdict}, "
-				f"got {report.verdict}"
-			)
+			    f"Expected verdict {expected_verdict}, "
+			    f"got {report.verdict}")
 
 	@pytest.mark.parametrize("fixture_name", _list_good_fixtures())
 	def test_good_fixture_score_in_range(self, fixture_name):
@@ -682,9 +689,8 @@ class TestFixtureReports:
 		if score_range and report.confidence_score is not None:
 			lo, hi = score_range
 			assert lo <= report.confidence_score <= hi, (
-				f"Score {report.confidence_score} outside "
-				f"range [{lo}, {hi}]"
-			)
+			    f"Score {report.confidence_score} outside "
+			    f"range [{lo}, {hi}]")
 
 	def test_bad_report_fails(self):
 		"""Bad report fixture fails expected checks."""
@@ -692,11 +698,8 @@ class TestFixtureReports:
 		report = Report.from_markdown(md)
 		result = run_all_checks(report, report_id="bad-report")
 		assert result.passed is False
-		failed_names = {
-			c.name for c in result.checks if not c.passed
-		}
+		failed_names = {c.name for c in result.checks if not c.passed}
 		for expected_fail in meta.get("expected_failures", []):
 			assert expected_fail in failed_names, (
-				f"Expected {expected_fail} to fail, "
-				f"but it passed"
-			)
+			    f"Expected {expected_fail} to fail, "
+			    f"but it passed")

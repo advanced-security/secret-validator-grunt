@@ -114,7 +114,14 @@ class Config(BaseSettings):
 	github_token: str | None = Field(
 	    default=None,
 	    alias="GITHUB_TOKEN",
-	    description="GitHub token for secret scanning API access",
+	    description=
+	    "GitHub token for secret scanning API access and git clone auth",
+	)
+	copilot_token: str | None = Field(
+	    default=None,
+	    alias="COPILOT_TOKEN",
+	    description=("Token for Copilot CLI authentication. "
+	                 "Falls back to GITHUB_TOKEN if unset."),
 	)
 	max_continuation_attempts: int = Field(
 	    2,
@@ -238,6 +245,14 @@ class Config(BaseSettings):
 	def use_native_cli(self) -> bool:
 		"""Return True when using native stdio mode (no external server)."""
 		return not self.cli_url
+
+	@property
+	def resolved_copilot_token(self) -> str | None:
+		"""Return the token to use for Copilot CLI auth.
+
+		Prefers COPILOT_TOKEN; falls back to GITHUB_TOKEN.
+		"""
+		return self.copilot_token or self.github_token
 
 	@property
 	def output_path(self) -> Path:
