@@ -73,45 +73,50 @@ GOOD_MD = """\
 
 > **Key Finding:** This is a real credential.
 
-## 1. Locations
+## 1. Secret Alert Details
+
+- **Secret Type:** github_token
+- **Detection Date:** 2026-02-10
+
+## 2. Locations
 
 | Path      | Line | Commit  | Notes |
 | --------- | ---- | ------- | ----- |
 | `config.py` | 10   | abc1234 | Found |
 
-## 2. Context and Intent
+## 3. Context and Intent
 
 Some context about the secret.
 
-## 3. Verification Testing
+## 4. Verification Testing
 
 | # | Test   | Method | Result  | Evidence   |
 | - | ------ | ------ | ------- | ---------- |
 | 1 | Check  | curl   | Success | 200 OK     |
 
-## 4. Documentary Evidence
+## 5. Documentary Evidence
 
 - `config.py` line 10
 
-## 5. Evidence Analysis
+## 6. Evidence Analysis
 
 | Dimension | Finding     | Confidence |
 | --------- | ----------- | ---------- |
 | Technical | Real token  | 90%        |
 
-## 6. Confidence Scoring
+## 7. Confidence Scoring
 
 | Factor   | Score | Rationale    |
 | -------- | ----- | ------------ |
 | Recency  | 9     | Very recent  |
 
-## 7. Risk Assessment
+## 8. Risk Assessment
 
 | Risk Factor    | Assessment |
 | -------------- | ---------- |
 | Exploitability | High       |
 
-## 8. Verdict
+## 9. Verdict
 
 - **Verdict:** TRUE_POSITIVE
 - **Immediate Actions:** Rotate credential

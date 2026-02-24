@@ -24,6 +24,7 @@ VALID_VERDICTS = frozenset({
 # Required section headings (checked against raw markdown).
 REQUIRED_SECTIONS = [
     "Executive Summary",
+    "Secret Alert Details",
     "Locations",
     "Context and Intent",
     "Verification Testing",

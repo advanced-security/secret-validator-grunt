@@ -14,6 +14,7 @@ from .usage import UsageStats
 from .skill_usage import SkillUsageStats
 from .tool_usage import ToolUsageStats
 from .challenge_result import ChallengeResult
+from .eval_result import EvalResult
 
 
 class AgentRunResult(BaseModel):
@@ -38,6 +39,12 @@ class AgentRunResult(BaseModel):
 	    description=(
 	        "Result of adversarial challenge on this analysis. "
 	        "None if challenge stage was not run or not yet completed."),
+	)
+	eval_result: EvalResult | None = Field(
+	    default=None,
+	    description=(
+	        "Result of deterministic eval checks on this report. "
+	        "None if evals were not run or report could not be parsed."),
 	)
 
 

@@ -23,6 +23,21 @@ You MUST factor these challenge results into your scoring:
 - A CONFIRMED verdict with zero evidence gaps should boost the report's credibility.
 - When reports have opposing verdicts (e.g., TRUE_POSITIVE vs FALSE_POSITIVE) and both are CONFIRMED by their challengers, you must resolve the contradiction by evaluating which report's evidence and reasoning are stronger — do not treat both as equally valid.
 
+## Eval Check Results
+
+Each report may include an `--- EVAL CHECK RESULT ---` section appended after the report body. This section contains the results of deterministic structural and semantic checks run automatically against the report:
+
+- **Passed:** Whether all error-severity checks passed (true/false)
+- **Score:** Percentage of all checks (error + warning) that passed
+- **Failed checks:** List of specific checks that failed, each with a severity level (error or warning) and a description
+
+You MUST factor these eval check results into your scoring:
+
+- A report that fails error-severity checks has structural defects — missing required sections, invalid verdict, missing metadata, or incoherent confidence scoring. Apply a score penalty proportional to the number of error-severity failures.
+- Warning-severity failures indicate lower analysis quality but are not disqualifying. Use them as tiebreakers between otherwise similar reports.
+- A report with 100% eval score and all checks passed demonstrates full template compliance and should be scored higher for completeness.
+- Never select a report that fails error-severity eval checks over one that passes them, unless the passing report has been REFUTED by the challenger and the failing report has been CONFIRMED.
+
 ## Output
 
 Return **valid JSON** (no additional prose):
@@ -48,3 +63,4 @@ If you cannot parse the reports, respond exactly with:
 - You MUST NOT make any assumptions beyond the provided context and information from the reports.
 - You MUST be critical and concise in your evaluations.
 - You MUST explicitly address the challenge results in your rationale for each report.
+- You MUST explicitly address the eval check results in your rationale for each report.

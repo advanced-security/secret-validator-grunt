@@ -80,40 +80,95 @@ def _format_skill_usage_summary(result: AgentRunResult) -> str:
 	return "\n".join(lines)
 
 
-def _format_reports(results: list[AgentRunResult]) -> str:
-	"""
-	Combine reports into a single markdown blob for judging.
+def _format_eval_annotation(result: AgentRunResult) -> str:
+	"""Format eval check annotation for a single report.
 
-	Includes skill usage summary when available to help judge
-	assess methodology compliance. Also includes challenge annotations
-	when challenger stage results are present.
+	Parameters:
+		result: The agent run result with eval data.
+
+	Returns:
+		Formatted eval annotation block, or empty string
+		if no eval result is present.
+	"""
+	if not result.eval_result:
+		return ""
+	er = result.eval_result
+	failed_checks = [
+	    c for c in er.checks if not c.passed
+	]
+	lines = [
+	    "\n--- EVAL CHECK RESULT ---",
+	    f"Passed: {er.passed}",
+	    f"Score: {er.score:.0%}",
+	]
+	if failed_checks:
+		lines.append("Failed checks:")
+		for fc in failed_checks:
+			lines.append(
+			    f"  - [{fc.severity}] {fc.name}: "
+			    f"{fc.message}"
+			)
+	lines.append("--- END EVAL ---")
+	return "\n".join(lines) + "\n"
+
+
+def _format_challenge_annotation(
+    result: AgentRunResult,
+) -> str:
+	"""Format challenge annotation for a single report.
+
+	Parameters:
+		result: The agent run result with challenge data.
+
+	Returns:
+		Formatted challenge annotation block, or empty
+		string if no challenge result is present.
+	"""
+	if not result.challenge_result:
+		return ""
+	cr = result.challenge_result
+	lines = [
+	    "\n--- ADVERSARIAL CHALLENGE RESULT ---",
+	    f"Challenge Verdict: {cr.verdict}",
+	    f"Reasoning: {cr.reasoning}",
+	]
+	if cr.evidence_gaps:
+		lines.append(
+		    f"Evidence Gaps: "
+		    f"{', '.join(cr.evidence_gaps)}"
+		)
+	if cr.contradicting_evidence:
+		lines.append(
+		    f"Contradicting Evidence: "
+		    f"{', '.join(cr.contradicting_evidence)}"
+		)
+	lines.append("--- END CHALLENGE ---")
+	return "\n".join(lines) + "\n"
+
+
+def _format_reports(results: list[AgentRunResult]) -> str:
+	"""Combine reports into a single markdown blob for judging.
+
+	Includes skill usage summary, eval check annotations,
+	and challenge annotations when available to help the
+	judge assess report quality and methodology compliance.
 
 	Parameters:
 		results: List of agent run results to format.
 
 	Returns:
-		Combined markdown string with all reports and skill usage.
+		Combined markdown string with all reports,
+		skill usage, eval results, and challenge results.
 	"""
 	blocks = []
 	for idx, res in enumerate(results):
 		body = (res.raw_markdown
-		        or (res.report.raw_markdown if res.report else "") or "")
+		        or (res.report.raw_markdown if res.report else "")
+		        or "")
 		skill_summary = _format_skill_usage_summary(res)
 		block = f"REPORT {idx}:\n{body}\n{skill_summary}\n"
-
-		# Append challenge annotation if present
-		if res.challenge_result:
-			cr = res.challenge_result
-			block += (f"\n--- ADVERSARIAL CHALLENGE RESULT ---\n"
-			          f"Challenge Verdict: {cr.verdict}\n"
-			          f"Reasoning: {cr.reasoning}\n")
-			if cr.evidence_gaps:
-				block += (f"Evidence Gaps: "
-				          f"{', '.join(cr.evidence_gaps)}\n")
-			if cr.contradicting_evidence:
-				block += (f"Contradicting Evidence: "
-				          f"{', '.join(cr.contradicting_evidence)}\n")
-			block += "--- END CHALLENGE ---\n"
+		block += _format_eval_annotation(res)
+		block += _format_challenge_annotation(res)
 
 		blocks.append(block)
 	return "\n".join(blocks)
