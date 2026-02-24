@@ -67,7 +67,10 @@ async def test_run_analysis_uses_config_timeout():
 	client = DummyClient()
 
 	res = await run_analysis(
-	    "0", client, cfg, agent,
+	    "0",
+	    client,
+	    cfg,
+	    agent,
 	    run_params=RunParams(org_repo="org/repo", alert_id="1"),
 	)
 	assert client.session.timeout == 123

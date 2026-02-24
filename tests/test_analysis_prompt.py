@@ -8,16 +8,14 @@ class TestBuildAnalysisPrompt:
 		"""All template placeholders are replaced with values."""
 		from secret_validator_grunt.core.analysis import build_analysis_prompt
 
-		template = (
-			"Workspace: {{workspace_path}}\n"
-			"Repository: {{org_repo}}\n"
-			"Alert: {{alert_id}}"
-		)
+		template = ("Workspace: {{workspace_path}}\n"
+		            "Repository: {{org_repo}}\n"
+		            "Alert: {{alert_id}}")
 		result = build_analysis_prompt(
-			prompt_template=template,
-			workspace_path="/tmp/workspace",
-			org_repo="owner/repo",
-			alert_id="12345",
+		    prompt_template=template,
+		    workspace_path="/tmp/workspace",
+		    org_repo="owner/repo",
+		    alert_id="12345",
 		)
 		assert "{{workspace_path}}" not in result
 		assert "{{org_repo}}" not in result
@@ -30,16 +28,14 @@ class TestBuildAnalysisPrompt:
 		"""Workspace path is substituted in all occurrences."""
 		from secret_validator_grunt.core.analysis import build_analysis_prompt
 
-		template = (
-			"Main: {{workspace_path}}\n"
-			"Scripts: {{workspace_path}}/scripts/\n"
-			"Logs: {{workspace_path}}/logs/"
-		)
+		template = ("Main: {{workspace_path}}\n"
+		            "Scripts: {{workspace_path}}/scripts/\n"
+		            "Logs: {{workspace_path}}/logs/")
 		result = build_analysis_prompt(
-			prompt_template=template,
-			workspace_path="/analysis/run-123",
-			org_repo="org/repo",
-			alert_id="1",
+		    prompt_template=template,
+		    workspace_path="/analysis/run-123",
+		    org_repo="org/repo",
+		    alert_id="1",
 		)
 		assert result.count("/analysis/run-123") == 3
 		assert "{{workspace_path}}" not in result
@@ -49,11 +45,11 @@ class TestBuildAnalysisPrompt:
 		from secret_validator_grunt.core.analysis import build_analysis_prompt
 
 		result = build_analysis_prompt(
-			prompt_template="Base prompt: {{org_repo}}",
-			workspace_path="/ws",
-			org_repo="org/repo",
-			alert_id="1",
-			report_template="# Report Template\n\n## Section",
+		    prompt_template="Base prompt: {{org_repo}}",
+		    workspace_path="/ws",
+		    org_repo="org/repo",
+		    alert_id="1",
+		    report_template="# Report Template\n\n## Section",
 		)
 		assert "Report template you must use:" in result
 		assert "```markdown" in result
@@ -65,11 +61,12 @@ class TestBuildAnalysisPrompt:
 		from secret_validator_grunt.core.analysis import build_analysis_prompt
 
 		result = build_analysis_prompt(
-			prompt_template="Base: {{workspace_path}}",
-			workspace_path="/ws",
-			org_repo="org/repo",
-			alert_id="1",
-			skill_manifest_context="## Available Skills\n\n- skill_one\n- skill_two",
+		    prompt_template="Base: {{workspace_path}}",
+		    workspace_path="/ws",
+		    org_repo="org/repo",
+		    alert_id="1",
+		    skill_manifest_context=
+		    "## Available Skills\n\n- skill_one\n- skill_two",
 		)
 		assert "## Available Skills" in result
 		assert "skill_one" in result
@@ -79,10 +76,10 @@ class TestBuildAnalysisPrompt:
 		from secret_validator_grunt.core.analysis import build_analysis_prompt
 
 		result = build_analysis_prompt(
-			prompt_template="Analyze {{org_repo}} alert {{alert_id}}",
-			workspace_path="/ws",
-			org_repo="acme/app",
-			alert_id="42",
+		    prompt_template="Analyze {{org_repo}} alert {{alert_id}}",
+		    workspace_path="/ws",
+		    org_repo="acme/app",
+		    alert_id="42",
 		)
 		assert result == "Analyze acme/app alert 42"
 
@@ -91,12 +88,12 @@ class TestBuildAnalysisPrompt:
 		from secret_validator_grunt.core.analysis import build_analysis_prompt
 
 		result = build_analysis_prompt(
-			prompt_template="Prompt",
-			workspace_path="/ws",
-			org_repo="o/r",
-			alert_id="1",
-			skill_manifest_context="Skills",
-			report_template="Template",
+		    prompt_template="Prompt",
+		    workspace_path="/ws",
+		    org_repo="o/r",
+		    alert_id="1",
+		    skill_manifest_context="Skills",
+		    report_template="Template",
 		)
 		# Parts should be separated by \n\n
 		assert "Prompt\n\n" in result
@@ -112,11 +109,11 @@ class TestBuildAnalysisPromptPreCloned:
 		from secret_validator_grunt.core.analysis import build_analysis_prompt
 
 		result = build_analysis_prompt(
-			prompt_template="Base: {{workspace_path}}",
-			workspace_path="/ws",
-			org_repo="org/repo",
-			alert_id="1",
-			repo_pre_cloned=True,
+		    prompt_template="Base: {{workspace_path}}",
+		    workspace_path="/ws",
+		    org_repo="org/repo",
+		    alert_id="1",
+		    repo_pre_cloned=True,
 		)
 		assert "Pre-cloned Repository" in result
 		assert "/ws/repo/" in result
@@ -127,11 +124,11 @@ class TestBuildAnalysisPromptPreCloned:
 		from secret_validator_grunt.core.analysis import build_analysis_prompt
 
 		result = build_analysis_prompt(
-			prompt_template="Base: {{workspace_path}}",
-			workspace_path="/ws",
-			org_repo="org/repo",
-			alert_id="1",
-			repo_pre_cloned=False,
+		    prompt_template="Base: {{workspace_path}}",
+		    workspace_path="/ws",
+		    org_repo="org/repo",
+		    alert_id="1",
+		    repo_pre_cloned=False,
 		)
 		assert "Pre-cloned Repository" not in result
 		assert "Do NOT clone" not in result
@@ -141,10 +138,10 @@ class TestBuildAnalysisPromptPreCloned:
 		from secret_validator_grunt.core.analysis import build_analysis_prompt
 
 		result = build_analysis_prompt(
-			prompt_template="Base: {{workspace_path}}",
-			workspace_path="/ws",
-			org_repo="org/repo",
-			alert_id="1",
+		    prompt_template="Base: {{workspace_path}}",
+		    workspace_path="/ws",
+		    org_repo="org/repo",
+		    alert_id="1",
 		)
 		assert "Pre-cloned Repository" not in result
 
@@ -153,13 +150,13 @@ class TestBuildAnalysisPromptPreCloned:
 		from secret_validator_grunt.core.analysis import build_analysis_prompt
 
 		result = build_analysis_prompt(
-			prompt_template="Prompt",
-			workspace_path="/ws",
-			org_repo="o/r",
-			alert_id="1",
-			skill_manifest_context="Skills",
-			report_template="Template",
-			repo_pre_cloned=True,
+		    prompt_template="Prompt",
+		    workspace_path="/ws",
+		    org_repo="o/r",
+		    alert_id="1",
+		    skill_manifest_context="Skills",
+		    report_template="Template",
+		    repo_pre_cloned=True,
 		)
 		assert "Pre-cloned Repository" in result
 		assert "Skills" in result
@@ -173,10 +170,9 @@ class TestScriptExecutionInstructions:
 		"""Testing environment skill requires executing scripts via bash."""
 		from pathlib import Path
 		skill_path = (
-			Path(__file__).parent.parent /
-			"src/secret_validator_grunt/skills/analysis/1-initialization"
-			"/testing-environment/SKILL.md"
-		)
+		    Path(__file__).parent.parent /
+		    "src/secret_validator_grunt/skills/analysis/1-initialization"
+		    "/testing-environment/SKILL.md")
 		content = skill_path.read_text()
 		assert "MUST be executed via `bash`" in content
 
@@ -184,10 +180,9 @@ class TestScriptExecutionInstructions:
 		"""Testing environment skill forbids writing results files by hand."""
 		from pathlib import Path
 		skill_path = (
-			Path(__file__).parent.parent /
-			"src/secret_validator_grunt/skills/analysis/1-initialization"
-			"/testing-environment/SKILL.md"
-		)
+		    Path(__file__).parent.parent /
+		    "src/secret_validator_grunt/skills/analysis/1-initialization"
+		    "/testing-environment/SKILL.md")
 		content = skill_path.read_text()
 		assert "FORBIDDEN" in content
 		assert "Writing `test_results.json` or any results file by hand" in content
@@ -196,10 +191,9 @@ class TestScriptExecutionInstructions:
 		"""Testing environment skill no longer provides save_test_result() template."""
 		from pathlib import Path
 		skill_path = (
-			Path(__file__).parent.parent /
-			"src/secret_validator_grunt/skills/analysis/1-initialization"
-			"/testing-environment/SKILL.md"
-		)
+		    Path(__file__).parent.parent /
+		    "src/secret_validator_grunt/skills/analysis/1-initialization"
+		    "/testing-environment/SKILL.md")
 		content = skill_path.read_text()
 		assert "save_test_result" not in content
 
@@ -207,10 +201,9 @@ class TestScriptExecutionInstructions:
 		"""Testing environment skill shows stdout capture via tee."""
 		from pathlib import Path
 		skill_path = (
-			Path(__file__).parent.parent /
-			"src/secret_validator_grunt/skills/analysis/1-initialization"
-			"/testing-environment/SKILL.md"
-		)
+		    Path(__file__).parent.parent /
+		    "src/secret_validator_grunt/skills/analysis/1-initialization"
+		    "/testing-environment/SKILL.md")
 		content = skill_path.read_text()
 		assert "2>&1 | tee" in content
 

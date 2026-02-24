@@ -9,8 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from secret_validator_grunt.core.runner import (
-	pre_clone_repo,
-)
+    pre_clone_repo, )
 
 
 class TestPreCloneRepo:
@@ -25,15 +24,16 @@ class TestPreCloneRepo:
 		mock_proc = AsyncMock()
 		mock_proc.returncode = 128
 		mock_proc.communicate = AsyncMock(
-			return_value=(b"", b"fatal: repo not found"),
-		)
+		    return_value=(b"", b"fatal: repo not found"), )
 
 		with patch(
-			"asyncio.create_subprocess_exec",
-			return_value=mock_proc,
+		    "asyncio.create_subprocess_exec",
+		    return_value=mock_proc,
 		):
 			result = await pre_clone_repo(
-				"org/repo", target, github_token=None,
+			    "org/repo",
+			    target,
+			    github_token=None,
 			)
 
 		assert result is None
@@ -49,16 +49,16 @@ class TestPreCloneRepo:
 
 		mock_proc = AsyncMock()
 		mock_proc.returncode = 0
-		mock_proc.communicate = AsyncMock(
-			return_value=(b"", b""),
-		)
+		mock_proc.communicate = AsyncMock(return_value=(b"", b""), )
 
 		with patch(
-			"asyncio.create_subprocess_exec",
-			return_value=mock_proc,
+		    "asyncio.create_subprocess_exec",
+		    return_value=mock_proc,
 		):
 			result = await pre_clone_repo(
-				"org/repo", target, github_token="ghp_test",
+			    "org/repo",
+			    target,
+			    github_token="ghp_test",
 			)
 
 		assert result == repo_dir
@@ -71,11 +71,11 @@ class TestPreCloneRepo:
 		repo_dir = target / "_shared_repo"
 		repo_dir.mkdir()
 
-		with patch(
-			"asyncio.create_subprocess_exec",
-		) as mock_exec:
+		with patch("asyncio.create_subprocess_exec", ) as mock_exec:
 			result = await pre_clone_repo(
-				"org/repo", target, github_token=None,
+			    "org/repo",
+			    target,
+			    github_token=None,
 			)
 			mock_exec.assert_not_called()
 
@@ -88,11 +88,13 @@ class TestPreCloneRepo:
 		target.mkdir()
 
 		with patch(
-			"asyncio.create_subprocess_exec",
-			side_effect=OSError("git not found"),
+		    "asyncio.create_subprocess_exec",
+		    side_effect=OSError("git not found"),
 		):
 			result = await pre_clone_repo(
-				"org/repo", target, github_token=None,
+			    "org/repo",
+			    target,
+			    github_token=None,
 			)
 
 		assert result is None
@@ -105,16 +107,16 @@ class TestPreCloneRepo:
 
 		mock_proc = AsyncMock()
 		mock_proc.returncode = 0
-		mock_proc.communicate = AsyncMock(
-			return_value=(b"", b""),
-		)
+		mock_proc.communicate = AsyncMock(return_value=(b"", b""), )
 
 		with patch(
-			"asyncio.create_subprocess_exec",
-			return_value=mock_proc,
+		    "asyncio.create_subprocess_exec",
+		    return_value=mock_proc,
 		) as mock_exec:
 			await pre_clone_repo(
-				"org/repo", target, github_token="ghp_abc123",
+			    "org/repo",
+			    target,
+			    github_token="ghp_abc123",
 			)
 
 		call_args = mock_exec.call_args
@@ -132,16 +134,16 @@ class TestPreCloneRepo:
 
 		mock_proc = AsyncMock()
 		mock_proc.returncode = 0
-		mock_proc.communicate = AsyncMock(
-			return_value=(b"", b""),
-		)
+		mock_proc.communicate = AsyncMock(return_value=(b"", b""), )
 
 		with patch(
-			"asyncio.create_subprocess_exec",
-			return_value=mock_proc,
+		    "asyncio.create_subprocess_exec",
+		    return_value=mock_proc,
 		) as mock_exec:
 			await pre_clone_repo(
-				"org/repo", target, github_token=None,
+			    "org/repo",
+			    target,
+			    github_token=None,
 			)
 
 		call_args = mock_exec.call_args

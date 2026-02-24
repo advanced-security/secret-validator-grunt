@@ -35,7 +35,7 @@ class TestCreateClient:
 
 	@patch("secret_validator_grunt.copilot_client.CopilotClient")
 	def test_native_stdio_mode_with_token(self, mock_client_class: MagicMock):
-		"""Client passes github_token in native mode for auth."""
+		"""Client passes github_token (fallback) in native mode for auth."""
 		cfg = Config(GITHUB_TOKEN="ghp_test123", LOG_LEVEL="warning")
 
 		create_client(cfg)
@@ -48,17 +48,51 @@ class TestCreateClient:
 		})
 
 	@patch("secret_validator_grunt.copilot_client.CopilotClient")
-	def test_external_mode_ignores_token(self, mock_client_class: MagicMock):
-		"""External server mode does not pass github_token (server manages auth)."""
+	def test_native_mode_copilot_token(self, mock_client_class: MagicMock):
+		"""Client uses COPILOT_TOKEN for SDK auth in native mode."""
+		cfg = Config(COPILOT_TOKEN="gho_copilot_abc", LOG_LEVEL="info")
+
+		create_client(cfg)
+
+		mock_client_class.assert_called_once_with({
+		    "log_level":
+		    "info",
+		    "github_token":
+		    "gho_copilot_abc",
+		})
+
+	@patch("secret_validator_grunt.copilot_client.CopilotClient")
+	def test_native_mode_copilot_token_precedence(
+	        self, mock_client_class: MagicMock):
+		"""COPILOT_TOKEN takes precedence over GITHUB_TOKEN for SDK auth."""
 		cfg = Config(
-		    COPILOT_CLI_URL="localhost:8080",
-		    GITHUB_TOKEN="ghp_test123",
+		    GITHUB_TOKEN="ghp_api_token",
+		    COPILOT_TOKEN="gho_copilot_token",
 		    LOG_LEVEL="info",
 		)
 
 		create_client(cfg)
 
-		# Token should NOT be in the options for external server mode
+		mock_client_class.assert_called_once_with({
+		    "log_level":
+		    "info",
+		    "github_token":
+		    "gho_copilot_token",
+		})
+
+	@patch("secret_validator_grunt.copilot_client.CopilotClient")
+	def test_external_mode_ignores_token(self, mock_client_class: MagicMock):
+		"""External server mode does not pass any token (server manages auth)."""
+		cfg = Config(
+		    COPILOT_CLI_URL="localhost:8080",
+		    GITHUB_TOKEN="ghp_test123",
+		    COPILOT_TOKEN="gho_copilot",
+		    LOG_LEVEL="info",
+		)
+
+		create_client(cfg)
+
+		# Neither token should be in the options for external server mode
 		call_args = mock_client_class.call_args[0][0]
 		assert "github_token" not in call_args
 		assert call_args["cli_url"] == "localhost:8080"

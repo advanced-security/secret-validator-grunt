@@ -16,12 +16,12 @@ from secret_validator_grunt.models.tool_usage import ToolUsageStats
 from secret_validator_grunt.models.challenge_result import ChallengeResult
 
 
-def _make_result(run_id: str, verdict: str | None = None,
-                 workspace: str | None = None,
-                 confidence_score: float | None = None,
-                 skill_usage: SkillUsageStats | None = None,
-                 tool_usage: ToolUsageStats | None = None,
-                 challenge_result: ChallengeResult | None = None) -> AgentRunResult:
+def _make_result(
+        run_id: str, verdict: str | None = None, workspace: str | None = None,
+        confidence_score: float | None = None,
+        skill_usage: SkillUsageStats | None = None,
+        tool_usage: ToolUsageStats | None = None,
+        challenge_result: ChallengeResult | None = None) -> AgentRunResult:
 	"""Helper to build a minimal AgentRunResult."""
 	report = None
 	if verdict:
@@ -149,18 +149,18 @@ def test_build_summary_data_winner_no_report():
 def test_build_summary_data_challenger_skill_usage_flag():
 	"""has_skill_usage is True when only challenger has skill_usage."""
 	cr = ChallengeResult(
-		verdict="CONFIRMED",
-		skill_usage=SkillUsageStats(
-			available_skills=["x"],
-			loaded_skills=["x"],
-		),
+	    verdict="CONFIRMED",
+	    skill_usage=SkillUsageStats(
+	        available_skills=["x"],
+	        loaded_skills=["x"],
+	    ),
 	)
 	results = [
-		_make_result(
-			"0",
-			skill_usage=None,
-			challenge_result=cr,
-		),
+	    _make_result(
+	        "0",
+	        skill_usage=None,
+	        challenge_result=cr,
+	    ),
 	]
 	data = build_summary_data(0, results, Path("/out"), show_usage=True)
 	assert data.has_skill_usage is True
@@ -172,15 +172,15 @@ def test_build_summary_data_challenger_tool_usage_flag():
 	tools.add_start("c1", "bash")
 	tools.add_complete("c1", success=True)
 	cr = ChallengeResult(
-		verdict="CONFIRMED",
-		tool_usage=tools,
+	    verdict="CONFIRMED",
+	    tool_usage=tools,
 	)
 	results = [
-		_make_result(
-			"0",
-			tool_usage=None,
-			challenge_result=cr,
-		),
+	    _make_result(
+	        "0",
+	        tool_usage=None,
+	        challenge_result=cr,
+	    ),
 	]
 	data = build_summary_data(0, results, Path("/out"), show_usage=True)
 	assert data.has_tool_usage is True
@@ -189,17 +189,17 @@ def test_build_summary_data_challenger_tool_usage_flag():
 def test_build_summary_data_no_challenger_usage_flags():
 	"""Usage flags are False when neither analysis nor challenger have data."""
 	cr = ChallengeResult(
-		verdict="CONFIRMED",
-		skill_usage=None,
-		tool_usage=None,
+	    verdict="CONFIRMED",
+	    skill_usage=None,
+	    tool_usage=None,
 	)
 	results = [
-		_make_result(
-			"0",
-			skill_usage=None,
-			tool_usage=None,
-			challenge_result=cr,
-		),
+	    _make_result(
+	        "0",
+	        skill_usage=None,
+	        tool_usage=None,
+	        challenge_result=cr,
+	    ),
 	]
 	data = build_summary_data(0, results, Path("/out"), show_usage=True)
 	assert data.has_skill_usage is False

@@ -93,9 +93,7 @@ def _format_eval_annotation(result: AgentRunResult) -> str:
 	if not result.eval_result:
 		return ""
 	er = result.eval_result
-	failed_checks = [
-	    c for c in er.checks if not c.passed
-	]
+	failed_checks = [c for c in er.checks if not c.passed]
 	lines = [
 	    "\n--- EVAL CHECK RESULT ---",
 	    f"Passed: {er.passed}",
@@ -104,17 +102,13 @@ def _format_eval_annotation(result: AgentRunResult) -> str:
 	if failed_checks:
 		lines.append("Failed checks:")
 		for fc in failed_checks:
-			lines.append(
-			    f"  - [{fc.severity}] {fc.name}: "
-			    f"{fc.message}"
-			)
+			lines.append(f"  - [{fc.severity}] {fc.name}: "
+			             f"{fc.message}")
 	lines.append("--- END EVAL ---")
 	return "\n".join(lines) + "\n"
 
 
-def _format_challenge_annotation(
-    result: AgentRunResult,
-) -> str:
+def _format_challenge_annotation(result: AgentRunResult, ) -> str:
 	"""Format challenge annotation for a single report.
 
 	Parameters:
@@ -133,15 +127,11 @@ def _format_challenge_annotation(
 	    f"Reasoning: {cr.reasoning}",
 	]
 	if cr.evidence_gaps:
-		lines.append(
-		    f"Evidence Gaps: "
-		    f"{', '.join(cr.evidence_gaps)}"
-		)
+		lines.append(f"Evidence Gaps: "
+		             f"{', '.join(cr.evidence_gaps)}")
 	if cr.contradicting_evidence:
-		lines.append(
-		    f"Contradicting Evidence: "
-		    f"{', '.join(cr.contradicting_evidence)}"
-		)
+		lines.append(f"Contradicting Evidence: "
+		             f"{', '.join(cr.contradicting_evidence)}")
 	lines.append("--- END CHALLENGE ---")
 	return "\n".join(lines) + "\n"
 
@@ -163,8 +153,7 @@ def _format_reports(results: list[AgentRunResult]) -> str:
 	blocks = []
 	for idx, res in enumerate(results):
 		body = (res.raw_markdown
-		        or (res.report.raw_markdown if res.report else "")
-		        or "")
+		        or (res.report.raw_markdown if res.report else "") or "")
 		skill_summary = _format_skill_usage_summary(res)
 		block = f"REPORT {idx}:\n{body}\n{skill_summary}\n"
 		block += _format_eval_annotation(res)

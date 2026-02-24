@@ -49,7 +49,10 @@ async def test_judge_fallback_on_error():
 	    AgentRunResult(run_id="1", raw_markdown="report1"),
 	]
 	jr = await run_judge(
-	    client, cfg, agent, results,
+	    client,
+	    cfg,
+	    agent,
+	    results,
 	    run_params=RunParams(org_repo="org/repo", alert_id="1"),
 	)
 	assert jr.winner_index == -1

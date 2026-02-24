@@ -3,9 +3,9 @@ import json
 import pytest
 
 from secret_validator_grunt.core.runner import (
-	run_all,
-	_persist_eval_results,
-	_run_eval_checks,
+    run_all,
+    _persist_eval_results,
+    _run_eval_checks,
 )
 from secret_validator_grunt.models.config import Config
 from secret_validator_grunt.models.eval_result import EvalCheck, EvalResult
@@ -92,7 +92,8 @@ async def test_run_all_saves_final_report(tmp_path, monkeypatch):
 	)
 
 	outcome = await run_all(
-	    cfg, RunParams(org_repo="org/repo", alert_id="1"),
+	    cfg,
+	    RunParams(org_repo="org/repo", alert_id="1"),
 	)
 	assert outcome.judge_result.winner_index == 0
 	alert_dir = tmp_path / "org" / "repo" / "1"
@@ -111,28 +112,25 @@ async def test_run_all_attaches_eval_results(tmp_path, monkeypatch):
 	cfg.judge_agent_file = str(agent_file)
 	cfg.challenger_agent_file = str(agent_file)
 	# Minimal report missing several required sections — evals should flag it
-	analysis_md = (
-	    "# Secret Validation Report: Alert ID 1\n\n"
-	    "## Executive Summary\n\n"
-	    "| Item | Value |\n| --- | --- |\n"
-	    "| Repository | org/repo |\n| Alert ID | 1 |\n"
-	    "| Secret Type | type |\n| Verdict | TRUE_POSITIVE |\n"
-	    "| Confidence Score | 5/10 (Medium) |\n"
-	    "| Risk Level | Medium |\n| Status | Open |\n"
-	    "| Analyst | test |\n| Report Date | 2026-01-28 |\n\n"
-	    "> **Key Finding:** test\n"
-	)
-	judge_json = (
-	    '```json\n{"winner_index": 0, "scores": '
-	    '[{"report_index": 0, "score": 1}]}\n```'
-	)
+	analysis_md = ("# Secret Validation Report: Alert ID 1\n\n"
+	               "## Executive Summary\n\n"
+	               "| Item | Value |\n| --- | --- |\n"
+	               "| Repository | org/repo |\n| Alert ID | 1 |\n"
+	               "| Secret Type | type |\n| Verdict | TRUE_POSITIVE |\n"
+	               "| Confidence Score | 5/10 (Medium) |\n"
+	               "| Risk Level | Medium |\n| Status | Open |\n"
+	               "| Analyst | test |\n| Report Date | 2026-01-28 |\n\n"
+	               "> **Key Finding:** test\n")
+	judge_json = ('```json\n{"winner_index": 0, "scores": '
+	              '[{"report_index": 0, "score": 1}]}\n```')
 	client = DummyClient([analysis_md], judge_json)
 	monkeypatch.setattr(
 	    "secret_validator_grunt.core.runner.create_client",
 	    lambda cfg: client,
 	)
 	outcome = await run_all(
-	    cfg, RunParams(org_repo="org/repo", alert_id="1"),
+	    cfg,
+	    RunParams(org_repo="org/repo", alert_id="1"),
 	)
 	# Eval result should be attached
 	res = outcome.analysis_results[0]
@@ -157,8 +155,8 @@ async def test_run_all_handles_analysis_exception(tmp_path, monkeypatch):
 	async def boom(*args, **kwargs):
 		raise RuntimeError("boom")
 
-	async def dummy_judge(client, config, agent, results,
-	                      run_params=None, progress_cb=None):
+	async def dummy_judge(client, config, agent, results, run_params=None,
+	                      progress_cb=None):
 		return JudgeResult(
 		    winner_index=-1,
 		    scores=[JudgeScore(report_index=0, score=0)],
@@ -176,7 +174,8 @@ async def test_run_all_handles_analysis_exception(tmp_path, monkeypatch):
 	                    dummy_judge)
 
 	outcome = await run_all(
-	    cfg, RunParams(org_repo="org/repo", alert_id="1"),
+	    cfg,
+	    RunParams(org_repo="org/repo", alert_id="1"),
 	)
 	assert len(outcome.analysis_results) == 1
 	assert outcome.analysis_results[0].error == "boom"
@@ -220,7 +219,8 @@ async def test_run_all_uses_custom_agents_and_prompts(tmp_path, monkeypatch):
 	)
 
 	await run_all(
-	    cfg, RunParams(org_repo="org/repo", alert_id="1"),
+	    cfg,
+	    RunParams(org_repo="org/repo", alert_id="1"),
 	)
 
 	assert client.session_configs, "Expected at least one session config"
@@ -248,22 +248,23 @@ async def test_run_all_uses_custom_agents_and_prompts(tmp_path, monkeypatch):
 # _persist_eval_results unit tests
 # -------------------------------------------------------------------
 
+
 def _make_eval_result(report_id: str = "run-0") -> EvalResult:
 	"""Build a minimal EvalResult for testing."""
 	return EvalResult(
-		report_id=report_id,
-		checks=[
-			EvalCheck(
-				name="has_verdict",
-				passed=True,
-				message="Verdict present",
-			),
-			EvalCheck(
-				name="has_required_sections",
-				passed=False,
-				message="Missing sections",
-			),
-		],
+	    report_id=report_id,
+	    checks=[
+	        EvalCheck(
+	            name="has_verdict",
+	            passed=True,
+	            message="Verdict present",
+	        ),
+	        EvalCheck(
+	            name="has_required_sections",
+	            passed=False,
+	            message="Missing sections",
+	        ),
+	    ],
 	)
 
 
@@ -273,9 +274,9 @@ def _make_result(
 ) -> AgentRunResult:
 	"""Build a minimal AgentRunResult for persistence tests."""
 	return AgentRunResult(
-		run_id="run-0",
-		workspace=workspace,
-		eval_result=eval_result,
+	    run_id="run-0",
+	    workspace=workspace,
+	    eval_result=eval_result,
 	)
 
 
@@ -343,8 +344,7 @@ class TestPersistEvalResults:
 
 		for i in range(3):
 			data = json.loads(
-			    (tmp_path / f"ws-{i}" / "diagnostics.json").read_text()
-			)
+			    (tmp_path / f"ws-{i}" / "diagnostics.json").read_text())
 			assert data["eval_result"]["report_id"] == f"run-{i}"
 
 	def test_handles_corrupt_diagnostics_gracefully(self, tmp_path):
@@ -363,11 +363,13 @@ class TestRunEvalChecks:
 	"""Tests for _run_eval_checks."""
 
 	def test_malformed_markdown_does_not_crash(
-	    self, monkeypatch,
+	    self,
+	    monkeypatch,
 	):
 		"""Malformed markdown that raises during parsing
 		is caught gracefully — eval_result stays None.
 		"""
+
 		def _boom(md):
 			raise ValueError("bad markdown")
 

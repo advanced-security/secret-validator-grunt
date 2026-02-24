@@ -7,9 +7,9 @@ import logging
 import pytest
 
 from secret_validator_grunt.utils.logging import (
-	sanitize_text,
-	TokenSanitizingFilter,
-	configure_logging,
+    sanitize_text,
+    TokenSanitizingFilter,
+    configure_logging,
 )
 
 
@@ -26,10 +26,8 @@ class TestSanitizeText:
 
 	def test_masks_token_in_surrounding_text(self) -> None:
 		"""Token is masked even when URL is embedded in a sentence."""
-		text = (
-			"clone failed: https://x-access-token:secret@host.com/r.git "
-			"returned 128"
-		)
+		text = ("clone failed: https://x-access-token:secret@host.com/r.git "
+		        "returned 128")
 		result = sanitize_text(text)
 		assert "secret" not in result
 		assert "***" in result
@@ -47,9 +45,7 @@ class TestSanitizeText:
 
 	def test_masks_multiple_tokens(self) -> None:
 		"""Multiple token URLs in one string are all masked."""
-		text = (
-			"https://u:tok1@a.com and https://v:tok2@b.com"
-		)
+		text = ("https://u:tok1@a.com and https://v:tok2@b.com")
 		result = sanitize_text(text)
 		assert "tok1" not in result
 		assert "tok2" not in result
@@ -59,24 +55,35 @@ class TestSanitizeText:
 		"""Empty string returns empty."""
 		assert sanitize_text("") == ""
 
+	def test_masks_different_token_types(self) -> None:
+		"""GitHub API and Copilot tokens in separate URLs are both masked."""
+		text = (
+		    "clone: https://x-access-token:ghp_api_token@github.com/o/r.git "
+		    "copilot: https://x-access-token:gho_copilot_token@github.com/o/r.git"
+		)
+		result = sanitize_text(text)
+		assert "ghp_api_token" not in result
+		assert "gho_copilot_token" not in result
+		assert result.count("***") == 2
+
 
 class TestTokenSanitizingFilter:
 	"""Tests for the TokenSanitizingFilter logging.Filter."""
 
 	def _make_record(
-		self,
-		msg: str,
-		args: tuple | dict | None = None,
+	    self,
+	    msg: str,
+	    args: tuple | dict | None = None,
 	) -> logging.LogRecord:
 		"""Create a minimal LogRecord for testing."""
 		record = logging.LogRecord(
-			name="test",
-			level=logging.WARNING,
-			pathname="test.py",
-			lineno=1,
-			msg=msg,
-			args=args,
-			exc_info=None,
+		    name="test",
+		    level=logging.WARNING,
+		    pathname="test.py",
+		    lineno=1,
+		    msg=msg,
+		    args=args,
+		    exc_info=None,
 		)
 		return record
 
@@ -84,8 +91,7 @@ class TestTokenSanitizingFilter:
 		"""Token in record.msg is masked."""
 		f = TokenSanitizingFilter()
 		record = self._make_record(
-			"error: https://u:ghp_secret@host.com/r.git"
-		)
+		    "error: https://u:ghp_secret@host.com/r.git")
 		f.filter(record)
 		assert "ghp_secret" not in record.msg
 		assert "***" in record.msg
@@ -94,8 +100,8 @@ class TestTokenSanitizingFilter:
 		"""Token in tuple args is masked."""
 		f = TokenSanitizingFilter()
 		record = self._make_record(
-			"clone output: %s",
-			("https://u:tok@host.com/r.git",),
+		    "clone output: %s",
+		    ("https://u:tok@host.com/r.git", ),
 		)
 		f.filter(record)
 		assert isinstance(record.args, tuple)
@@ -113,9 +119,9 @@ class TestTokenSanitizingFilter:
 	def test_non_string_args_unchanged(self) -> None:
 		"""Non-string args pass through without modification."""
 		f = TokenSanitizingFilter()
-		record = self._make_record("rc=%d", (128,))
+		record = self._make_record("rc=%d", (128, ))
 		f.filter(record)
-		assert record.args == (128,)
+		assert record.args == (128, )
 
 	def test_always_returns_true(self) -> None:
 		"""Filter never suppresses records — always returns True."""
@@ -139,27 +145,21 @@ class TestConfigureLoggingFilter:
 		root = logging.getLogger()
 		# Remove any pre-existing filter from prior test runs
 		root.filters = [
-			f for f in root.filters
-			if not isinstance(f, TokenSanitizingFilter)
+		    f for f in root.filters if not isinstance(f, TokenSanitizingFilter)
 		]
 		configure_logging("warning")
-		count = sum(
-			1 for f in root.filters
-			if isinstance(f, TokenSanitizingFilter)
-		)
+		count = sum(1 for f in root.filters
+		            if isinstance(f, TokenSanitizingFilter))
 		assert count == 1
 
 	def test_no_duplicate_on_repeated_calls(self) -> None:
 		"""Calling configure_logging twice doesn't add duplicate filters."""
 		root = logging.getLogger()
 		root.filters = [
-			f for f in root.filters
-			if not isinstance(f, TokenSanitizingFilter)
+		    f for f in root.filters if not isinstance(f, TokenSanitizingFilter)
 		]
 		configure_logging("info")
 		configure_logging("info")
-		count = sum(
-			1 for f in root.filters
-			if isinstance(f, TokenSanitizingFilter)
-		)
+		count = sum(1 for f in root.filters
+		            if isinstance(f, TokenSanitizingFilter))
 		assert count == 1

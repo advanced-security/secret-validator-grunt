@@ -68,6 +68,45 @@ def test_native_mode_with_github_token():
 	assert cfg.github_token == "ghp_test123"
 
 
+# ── copilot_token & resolved_copilot_token ───────────────────────────
+
+
+def test_copilot_token_default_none():
+	"""COPILOT_TOKEN defaults to None when unset."""
+	cfg = Config()
+	assert cfg.copilot_token is None
+
+
+def test_copilot_token_field():
+	"""COPILOT_TOKEN alias populates the copilot_token field."""
+	cfg = Config(COPILOT_TOKEN="gho_copilot_abc")
+	assert cfg.copilot_token == "gho_copilot_abc"
+
+
+def test_resolved_copilot_token_prefers_copilot():
+	"""Resolved token prefers COPILOT_TOKEN over GITHUB_TOKEN."""
+	cfg = Config(GITHUB_TOKEN="ghp_api", COPILOT_TOKEN="gho_copilot")
+	assert cfg.resolved_copilot_token == "gho_copilot"
+
+
+def test_resolved_copilot_token_fallback_github():
+	"""Resolved token falls back to GITHUB_TOKEN when unset."""
+	cfg = Config(GITHUB_TOKEN="ghp_fallback")
+	assert cfg.resolved_copilot_token == "ghp_fallback"
+
+
+def test_resolved_copilot_token_both_none():
+	"""Resolved token returns None when neither token is set."""
+	cfg = Config()
+	assert cfg.resolved_copilot_token is None
+
+
+def test_resolved_copilot_token_empty_string_fallback():
+	"""Empty COPILOT_TOKEN falls back to GITHUB_TOKEN."""
+	cfg = Config(GITHUB_TOKEN="ghp_real", COPILOT_TOKEN="")
+	assert cfg.resolved_copilot_token == "ghp_real"
+
+
 def test_validate_secret_timeout_default():
 	"""Default validate_secret_timeout_seconds is 30."""
 	cfg = Config()
