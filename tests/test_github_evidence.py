@@ -143,7 +143,7 @@ async def test_cancelled_waiter_does_not_cancel_shared_request(
 		second = asyncio.create_task(source.fetch(request()))
 		first.cancel()
 		with pytest.raises(asyncio.CancelledError):
-			await first
+			first.result()
 	finally:
 		release.set()
 	assert json.loads(await second)["state"] == "open"
