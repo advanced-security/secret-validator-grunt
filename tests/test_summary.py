@@ -2,13 +2,7 @@
 
 from pathlib import Path
 
-from secret_validator_grunt.models.summary import (
-    build_summary_data,
-    SummaryData,
-    WinnerInfo,
-    JudgeInfo,
-    WorkspaceEntry,
-)
+from secret_validator_grunt.models.summary import build_summary_data
 from secret_validator_grunt.models.run_result import AgentRunResult
 from secret_validator_grunt.models.report import Report
 from secret_validator_grunt.models.skill_usage import SkillUsageStats
@@ -113,6 +107,20 @@ def test_build_summary_data_workspaces():
 	assert data.workspaces[0].run_id == "0"
 	assert data.workspaces[1].run_id == "1"
 	assert data.workspaces[2].run_id == "judge"
+
+
+def test_build_summary_lists_challenger_evidence() -> None:
+	"""The final summary exposes the separate challenger evidence directory."""
+	results = [
+	    _make_result(
+	        "0", workspace="/out/analyst", challenge_result=ChallengeResult(
+	            verdict="CONFIRMED", workspace="/out/challenges/unique")),
+	]
+	data = build_summary_data(0, results, Path("/out"))
+	assert [(w.run_id, w.workspace) for w in data.workspaces] == [
+	    ("0", "/out/analyst"),
+	    ("challenge-0", "/out/challenges/unique"),
+	]
 
 
 def test_build_summary_data_usage_flags():

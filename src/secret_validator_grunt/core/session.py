@@ -9,10 +9,16 @@ template loading, and session lifecycle management.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
+
+from copilot.session import PermissionHandler
+from copilot.generated.session_events import SessionEvent
 
 from secret_validator_grunt.models.config import Config
 from secret_validator_grunt.models.agent_config import AgentConfig
+from secret_validator_grunt.models.skill import SkillManifest
 from secret_validator_grunt.loaders.templates import load_report_template
 from secret_validator_grunt.ui.streaming import (
     StreamCollector,
@@ -28,6 +34,7 @@ from secret_validator_grunt.utils.logging import get_logger
 from secret_validator_grunt.utils.protocols import SessionProtocol
 
 logger = get_logger(__name__)
+SKILL_CATALOG_TIMEOUT_SECONDS = 5
 
 
 def build_session_config(
@@ -40,11 +47,33 @@ def build_session_config(
     disabled_skills: list[str] | None = None,
     system_message: str | None = None,
     session_id: str | None = None,
-) -> dict:
-	"""Build a session configuration dict for create_session().
+    working_directory: str | None = None,
+    on_event: Callable[[SessionEvent], None] | None = None,
+) -> dict[str, Any]:
+	"""Build keyword arguments for CopilotClient.create_session().
 
 	Centralizes the common session config structure used by
-	analysis, judge, and challenger stages.
+	analysis, judge, and challenger stages. The returned dict is
+	unpacked into ``create_session(**config)``.
+
+	The custom agent is pre-selected via ``agent`` so it runs as the
+	session's root agent from the first prompt (rather than relying on
+	an ``@agent`` mention and sub-agent inference).
+
+	``available_tools`` mirrors the agent's ``tools`` list. ``None``
+	leaves the session unrestricted, while an explicit empty list is
+	preserved so the session has no tools at all (the runtime would
+	otherwise add mandatory tools such as ``skill`` and ``sql``).
+
+	Custom instructions (``AGENTS.md``, ``.github/instructions``) are
+	skipped: the session's working directory lives inside this
+	project's git tree, and its developer instructions must not leak
+	into the stage agents' context.
+
+	Permission requests are auto-approved because sessions run
+	unattended and the SDK otherwise leaves them pending, which would
+	stall the session. This is not a sandbox: tools may still access
+	paths outside the working directory.
 
 	Parameters:
 		model: Model identifier string.
@@ -53,25 +82,39 @@ def build_session_config(
 		tools: Tool definitions for the session.
 		skill_directories: Skill directory paths.
 		disabled_skills: Skills to disable, or None.
-		system_message: Optional system message text.
+		system_message: Optional system message text, appended to
+			the SDK-managed system prompt.
 		session_id: Optional session identifier.
+		working_directory: Optional working directory for the
+			session's tool operations.
+		on_event: Collector registered before session-creation events arrive.
 
 	Returns:
-		Session configuration dictionary.
+		Keyword arguments for create_session().
 	"""
-	config: dict = {
+	config: dict[str, Any] = {
 	    "model": model,
 	    "streaming": streaming,
 	    "custom_agents": [to_custom_agent(agent)],
+	    "agent": agent.name,
 	    "tools": tools,
-	    "available_tools": agent.tools or None,
+	    "available_tools": agent.tools,
 	    "skill_directories": skill_directories,
 	    "disabled_skills": disabled_skills or None,
+	    "on_permission_request": PermissionHandler.approve_all,
+	    "skip_custom_instructions": True,
 	}
 	if system_message is not None:
-		config["system_message"] = {"text": system_message}
+		config["system_message"] = {
+		    "mode": "append",
+		    "content": system_message,
+		}
 	if session_id is not None:
 		config["session_id"] = session_id
+	if working_directory is not None:
+		config["working_directory"] = working_directory
+	if on_event is not None:
+		config["on_event"] = on_event
 	return config
 
 
@@ -252,8 +295,7 @@ async def _send_once(
 	"""
 	raw: str | None = None
 	try:
-		response = await session.send_and_wait({"prompt": prompt},
-		                                       timeout=timeout)
+		response = await session.send_and_wait(prompt, timeout=timeout)
 		if response and getattr(response, "data", None):
 			raw = response.data.content
 	except asyncio.TimeoutError as te:
@@ -277,11 +319,63 @@ async def _send_once(
 	return raw
 
 
+async def verify_runtime_skills(
+    session: SessionProtocol,
+    manifest: SkillManifest,
+    disabled_skills: list[str],
+    collector: StreamCollector,
+    run_id: str,
+    progress_cb: ProgressCallback | None = None,
+) -> list[str] | None:
+	"""Check optional on-demand skills against the runtime catalog.
+
+	The runtime silently ignores skills it cannot parse or resolve.
+	Required content is supplied directly in the prompt. Only optional
+	guides depend on runtime discovery. This bounded check is diagnostic.
+
+	Parameters:
+		session: Session created with the manifest's skill directories.
+		manifest: Skill manifest advertised to the agent.
+		disabled_skills: Skill names intentionally disabled.
+		collector: Collector whose skill usage records the result.
+		run_id: Run identifier for logs and progress.
+		progress_cb: Optional progress callback.
+
+	Returns:
+		Names of enabled manifest skills missing from the runtime catalog,
+		or None when the catalog could not be queried.
+	"""
+	try:
+		catalog = await asyncio.wait_for(session.rpc.skills.list(),
+		                                 timeout=SKILL_CATALOG_TIMEOUT_SECONDS)
+	except Exception:
+		logger.warning("could not list optional runtime skills for %s", run_id,
+		               exc_info=True)
+		return None
+
+	runtime_enabled = {s.name for s in catalog.skills if s.enabled}
+	excluded = set(disabled_skills)
+	missing: list[str] = []
+	for skill in manifest.skills:
+		if (not skill.required and skill.name not in excluded
+		    and skill.name not in runtime_enabled
+		    and skill.name not in missing):
+			missing.append(skill.name)
+
+	collector.skill_usage.unavailable_skills = missing
+	if missing:
+		logger.warning("%s: %d optional skill(s) unavailable at runtime: %s",
+		               run_id, len(missing), ", ".join(missing))
+		if progress_cb:
+			progress_cb(run_id, f"skills_unavailable: {', '.join(missing)}")
+	return missing
+
+
 async def destroy_session_safe(
     session: SessionProtocol | None,
     label: str,
 ) -> None:
-	"""Destroy a session, logging but not raising on failure.
+	"""Disconnect a session, logging but not raising on failure.
 
 	Parameters:
 		session: Session to destroy, or None.
@@ -290,9 +384,9 @@ async def destroy_session_safe(
 	if not session:
 		return
 	try:
-		await session.destroy()
+		await session.disconnect()
 	except Exception:
-		logger.debug("failed to destroy %s session", label, exc_info=True)
+		logger.debug("failed to disconnect %s session", label, exc_info=True)
 
 
 __all__ = [
@@ -300,6 +394,7 @@ __all__ = [
     "load_and_validate_template",
     "discover_all_disabled_skills",
     "send_and_collect",
+    "verify_runtime_skills",
     "destroy_session_safe",
     "is_response_empty",
 ]

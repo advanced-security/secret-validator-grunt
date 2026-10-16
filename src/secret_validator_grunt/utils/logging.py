@@ -10,6 +10,9 @@ from __future__ import annotations
 import logging
 import re
 
+from rich.console import Console
+from rich.logging import RichHandler
+
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 
 # Pattern to match tokens embedded in git clone URLs
@@ -38,8 +41,8 @@ def sanitize_text(text: str) -> str:
 class TokenSanitizingFilter(logging.Filter):
 	"""Logging filter that redacts credentials from log records.
 
-	Applied to the root logger so every handler benefits from
-	token masking without call-site awareness.
+	Applied to the configured handler so child loggers are also
+	sanitized without call-site awareness.
 	"""
 
 	def filter(self, record: logging.LogRecord) -> bool:
@@ -59,19 +62,24 @@ class TokenSanitizingFilter(logging.Filter):
 		return True
 
 
-def configure_logging(level: str = "info") -> None:
+def configure_logging(level: str = "info",
+                      console: Console | None = None) -> None:
 	"""
 	Configure basic logging with level, format, and token sanitization.
 
-	Installs a ``TokenSanitizingFilter`` on the root logger so that
-	credentials embedded in git URLs are automatically redacted from
-	all log output.
+	Use the live display's console when provided so log messages clear
+	and redraw the display instead of writing through it.
 
 	Parameters:
 		level: Log level string (e.g., "info", "debug", "warning").
+		console: Shared Rich console, or None for standard stderr logging.
 	"""
 	lvl = logging._nameToLevel.get(level.upper(), logging.INFO)
-	logging.basicConfig(level=lvl, format=LOG_FORMAT)
+	handler = (RichHandler(console=console, show_time=False, show_level=False,
+	                       show_path=False)
+	           if console is not None else logging.StreamHandler())
+	handler.addFilter(TokenSanitizingFilter())
+	logging.basicConfig(level=lvl, format=LOG_FORMAT, handlers=[handler])
 	root = logging.getLogger()
 	# Avoid adding duplicate filters on repeated calls
 	if not any(isinstance(f, TokenSanitizingFilter) for f in root.filters):

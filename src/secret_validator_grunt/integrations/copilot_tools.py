@@ -7,96 +7,77 @@ GitHub's Secret Scanning API and the validate-secrets library.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import functools
 from typing import Any
 
-from copilot.types import Tool, ToolInvocation, ToolResult
+from copilot import Tool, ToolInvocation, ToolResult
+from pydantic import ValidationError
 
 from secret_validator_grunt.models.config import Config
-from secret_validator_grunt.integrations.github import (
-    get_github_client,
-    get_alert,
-    list_alert_locations,
-    DEFAULT_UA,
-)
+from secret_validator_grunt.models.github_tool_params import GitHubToolParams
+from secret_validator_grunt.integrations.github_evidence import GitHubEvidence
 
 
-def _parse_repo(repo: str) -> tuple[str, str]:
-	"""Split an 'owner/repo' string into (owner, name) tuple."""
-	owner, name = repo.split("/", 1)
-	return owner, name
+def _github_params(invocation: ToolInvocation, context_repo: str | None,
+                   context_alert_id: str | None) -> GitHubToolParams:
+	"""Apply only omitted defaults; explicit invalid arguments must fail."""
+	return GitHubToolParams.model_validate({
+	    "repo": context_repo,
+	    "alert_number": context_alert_id,
+	    **(invocation.arguments or {}),
+	})
 
 
-def _success(text: str, data: dict) -> ToolResult:
-	"""Build a successful ToolResult dict."""
-	return {
-	    "textResultForLlm": text,
-	    "resultType": "success",
-	    "toolTelemetry": {},
-	    "sessionLog": "",
-	    "binaryResultsForLlm": [],
-	    "data": data,
-	}
+def _success(text: str) -> ToolResult:
+	"""Build a successful ToolResult; only the text is shown to the LLM."""
+	return ToolResult(
+	    text_result_for_llm=text,
+	    result_type="success",
+	    tool_telemetry={},
+	)
 
 
 def _failure(msg: str) -> ToolResult:
-	"""Build a failure ToolResult dict with an error message."""
-	return {
-	    "textResultForLlm": msg,
-	    "resultType": "failure",
-	    "toolTelemetry": {},
-	    "sessionLog": "",
-	    "binaryResultsForLlm": [],
-	    "data": {
-	        "error": msg
-	    },
-	}
+	"""Build a failure ToolResult with an error message."""
+	return ToolResult(
+	    text_result_for_llm=msg,
+	    result_type="failure",
+	    error=msg,
+	    tool_telemetry={},
+	)
 
 
 def secret_scanning_alert_tool(config: Config, context_repo: str | None,
-                               context_alert_id: str | None) -> Tool:
+                               context_alert_id: str | None,
+                               evidence: GitHubEvidence | None = None) -> Tool:
 	"""Define a tool that fetches secret scanning alert details via GitHub API."""
+	source = evidence or GitHubEvidence(config.github_token)
 
-	def handler(invocation: ToolInvocation) -> ToolResult:
-		params: dict[str, Any] = invocation.get("arguments") or {}
-		repo = params.get("repo") or context_repo
-		alert_number = params.get("alert_number") or context_alert_id
-		token = config.github_token
-		if not repo or not alert_number:
-			raise ValueError("repo and alert_number are required")
-		if not token:
-			return _failure("GitHub token required. Set GITHUB_TOKEN in .env")
+	async def handler(invocation: ToolInvocation) -> ToolResult:
+		"""Return real evidence or an explicit tool failure."""
 		try:
-			alert_num_int = int(alert_number)
-		except Exception as e:  # noqa: BLE001
-			raise ValueError("alert_number must be an integer") from e
-		owner, name = _parse_repo(str(repo))
-		api = get_github_client(token, user_agent=DEFAULT_UA)
-		data = get_alert(api, owner, name, alert_num_int)
-		alert = data
-		text = json.dumps(
-		    {
-		        "repo":
-		        repo,
-		        "alert_number":
-		        alert_num_int,
-		        "state":
-		        alert.get("state") if isinstance(alert, dict) else None,
-		        "secret_type":
-		        alert.get("secret_type") if isinstance(alert, dict) else None,
-		        "locations_url":
-		        alert.get("locations_url")
-		        if isinstance(alert, dict) else None,
-		    }, ensure_ascii=False)
-		return _success(text, {"alert": data})
+			params = _github_params(invocation, context_repo, context_alert_id)
+			return _success(await source.fetch(params))
+		except (ValidationError, RuntimeError) as exc:
+			return _failure(str(exc))
 
 	return Tool(
 	    name="gh_secret_scanning_alert",
-	    description="Fetch GitHub secret scanning alert details",
+	    description=(
+	        "Fetch full alert facts including the secret and validity. "
+	        "Reuses this run's timestamped snapshot; set refresh=true "
+	        "to check current rotation/resolution state."),
 	    parameters={
 	        "type": "object",
 	        "properties": {
+	            "refresh": {
+	                "type": "boolean",
+	                "default": False,
+	                "description":
+	                "Fetch current facts instead of the snapshot",
+	            },
 	            "repo": {
 	                "type": "string",
 	                "description": "owner/repo (defaults to current org_repo)",
@@ -111,42 +92,50 @@ def secret_scanning_alert_tool(config: Config, context_repo: str | None,
 	)
 
 
-def secret_scanning_alert_locations_tool(config: Config,
-                                         context_repo: str | None,
-                                         context_alert_id: str | None) -> Tool:
+def secret_scanning_alert_locations_tool(
+        config: Config, context_repo: str | None, context_alert_id: str | None,
+        evidence: GitHubEvidence | None = None) -> Tool:
 	"""Fetch secret scanning alert locations via GitHub API."""
+	source = evidence or GitHubEvidence(config.github_token)
 
-	def handler(invocation: ToolInvocation) -> ToolResult:
-		params: dict[str, Any] = invocation.get("arguments") or {}
-		repo = params.get("repo") or context_repo
-		alert_number = params.get("alert_number") or context_alert_id
-		token = config.github_token
-		if not repo or not alert_number:
-			raise ValueError("repo and alert_number are required")
-		if not token:
-			return _failure("GitHub token required. Set GITHUB_TOKEN in .env")
+	async def handler(invocation: ToolInvocation) -> ToolResult:
+		"""Return a reusable page without blocking other agents."""
 		try:
-			alert_num_int = int(alert_number)
-		except Exception as e:  # noqa: BLE001
-			raise ValueError("alert_number must be an integer") from e
-		owner, name = _parse_repo(str(repo))
-		api = get_github_client(token, user_agent=DEFAULT_UA)
-		locations = list_alert_locations(api, owner, name, alert_num_int)
-		locations_count = len(locations) if isinstance(locations, list) else 0
-		text = json.dumps(
-		    {
-		        "repo": repo,
-		        "alert_number": alert_num_int,
-		        "locations_count": locations_count,
-		    }, ensure_ascii=False)
-		return _success(text, {"locations": locations})
+			params = _github_params(invocation, context_repo, context_alert_id)
+			return _success(await source.fetch(params, locations=True))
+		except (ValidationError, RuntimeError) as exc:
+			return _failure(str(exc))
 
 	return Tool(
 	    name="gh_secret_scanning_alert_locations",
-	    description="List GitHub secret scanning alert locations",
+	    description=(
+	        "Fetch one page of full secret scanning locations. "
+	        "Follow next_page until null; locations_count is only "
+	        "the count on this page, not the alert total. Pages are "
+	        "cached for this run; refresh=true re-fetches this page."),
 	    parameters={
 	        "type": "object",
 	        "properties": {
+	            "refresh": {
+	                "type":
+	                "boolean",
+	                "default":
+	                False,
+	                "description":
+	                "Re-fetch this page; repeat on each page "
+	                "when refreshing the entire location set",
+	            },
+	            "page": {
+	                "type": "integer",
+	                "minimum": 1,
+	                "default": 1,
+	            },
+	            "per_page": {
+	                "type": "integer",
+	                "minimum": 1,
+	                "maximum": 100,
+	                "default": 50,
+	            },
 	            "repo": {
 	                "type": "string",
 	                "description": "owner/repo (defaults to current org_repo)",
@@ -202,8 +191,9 @@ def validate_secret_tool(config: Config) -> Tool:
 		Tool instance for secret validation.
 	"""
 
-	def handler(invocation: ToolInvocation) -> ToolResult:
-		params: dict[str, Any] = (invocation.get("arguments") or {})
+	def validate(invocation: ToolInvocation) -> ToolResult:
+		"""Run an uncached provider check on a worker thread."""
+		params: dict[str, Any] = (invocation.arguments or {})
 		secret = params.get("secret")
 		secret_type = params.get("secret_type")
 		timeout = params.get(
@@ -232,12 +222,7 @@ def validate_secret_tool(config: Config) -> Tool:
 			        f"No validator registered for "
 			        f"'{secret_type}'. Proceed with "
 			        f"manual verification.",
-			    }),
-			    {
-			        "status": "no_validator",
-			        "secret_type": secret_type,
-			    },
-			)
+			    }))
 
 		try:
 			validator = validator_class(
@@ -252,13 +237,7 @@ def validate_secret_tool(config: Config) -> Tool:
 			        "secret_type": secret_type,
 			        "status": "error",
 			        "message": str(exc),
-			    }),
-			    {
-			        "status": "error",
-			        "secret_type": secret_type,
-			        "error": str(exc),
-			    },
-			)
+			    }))
 
 		status = {True: "valid", False: "invalid"}.get(result, "error")
 		try:
@@ -276,13 +255,11 @@ def validate_secret_tool(config: Config) -> Tool:
 		        metadata.get("name", secret_type),
 		        "validator_description":
 		        metadata.get("description", ""),
-		    }),
-		    {
-		        "status": status,
-		        "secret_type": secret_type,
-		        "validator": metadata,
-		    },
-		)
+		    }))
+
+	async def handler(invocation: ToolInvocation) -> ToolResult:
+		"""Keep provider network calls off the session event loop."""
+		return await asyncio.to_thread(validate, invocation)
 
 	return Tool(
 	    name="validate_secret",
@@ -338,9 +315,7 @@ def list_secret_validators_tool() -> Tool:
 			    json.dumps({
 			        "validators": validators,
 			        "count": len(validators),
-			    }),
-			    {"validators": validators},
-			)
+			    }))
 		except Exception as exc:  # noqa: BLE001
 			return _failure(f"Failed to list validators: {exc}")
 
@@ -357,11 +332,14 @@ def list_secret_validators_tool() -> Tool:
 
 
 def get_session_tools(config: Config, org_repo: str | None,
-                      alert_id: str | None) -> list[Tool]:
+                      alert_id: str | None,
+                      evidence: GitHubEvidence | None = None) -> list[Tool]:
 	"""Return tools to register for a session."""
+	source = evidence or GitHubEvidence(config.github_token)
 	return [
-	    secret_scanning_alert_tool(config, org_repo, alert_id),
-	    secret_scanning_alert_locations_tool(config, org_repo, alert_id),
+	    secret_scanning_alert_tool(config, org_repo, alert_id, source),
+	    secret_scanning_alert_locations_tool(config, org_repo, alert_id,
+	                                         source),
 	    validate_secret_tool(config),
 	    list_secret_validators_tool(),
 	]

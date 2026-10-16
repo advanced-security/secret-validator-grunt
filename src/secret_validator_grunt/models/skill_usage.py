@@ -2,7 +2,7 @@
 Skill usage tracking models.
 
 Defines Pydantic models for tracking skill loading events and
-computing methodology compliance metrics during agent sessions.
+computing required guidance coverage during agent sessions.
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ class SkillLoadEvent(BaseModel):
 		is_required: Whether this skill was marked as required.
 		error_message: Error details if the load failed.
 		duration_ms: Time taken to load the skill in milliseconds.
+		supplied: Whether the body was included directly in the task prompt.
 	"""
 
 	skill_name: str = Field(description="Name of the requested skill")
@@ -49,6 +50,10 @@ class SkillLoadEvent(BaseModel):
 	                                  description="Error if failed")
 	duration_ms: float | None = Field(default=None,
 	                                  description="Load duration in ms")
+	supplied: bool = Field(
+	    default=False,
+	    description="Body supplied in the prompt rather than a tool call",
+	)
 
 
 class SkillUsageStats(BaseModel):
@@ -56,7 +61,8 @@ class SkillUsageStats(BaseModel):
 	Aggregated skill usage statistics for a session.
 
 	Tracks which skills were available, required, disabled, and actually
-	loaded during an agent session. Provides compliance metrics.
+	supplied or loaded during an agent session. Tracks guidance coverage,
+	not whether the agent performed the methodology.
 
 	Attributes:
 		available_skills: List of skill names in the manifest.
@@ -65,6 +71,9 @@ class SkillUsageStats(BaseModel):
 		loaded_skills: List of skill names successfully loaded.
 		failed_skills: List of skill names that failed to load.
 		skipped_required: Required skills that were not loaded.
+		supplied_skills: Required skill bodies included in the task prompt.
+		unavailable_skills: Optional manifest skills missing from the runtime
+			skill catalog (None when the catalog was not checked).
 		load_events: Detailed log of all load attempts.
 	"""
 
@@ -92,6 +101,15 @@ class SkillUsageStats(BaseModel):
 	    default_factory=list,
 	    description="Required skills not loaded",
 	)
+	supplied_skills: list[str] = Field(
+	    default_factory=list,
+	    description="Required skill bodies supplied in the prompt",
+	)
+	unavailable_skills: list[str] | None = Field(
+	    default=None,
+	    description=("Optional skills not enabled in the runtime skill "
+	                 "catalog; None when the catalog was not checked"),
+	)
 	load_events: list[SkillLoadEvent] = Field(
 	    default_factory=list,
 	    description="Detailed log of all load attempts",
@@ -104,7 +122,7 @@ class SkillUsageStats(BaseModel):
 	@property
 	def compliance_score(self) -> float:
 		"""
-		Calculate methodology compliance as percentage of required skills loaded.
+		Calculate required guidance coverage, not methodology execution.
 
 		Returns:
 			100.0 if no required skills, otherwise percentage loaded.
@@ -126,7 +144,9 @@ class SkillUsageStats(BaseModel):
 		result: dict[str, list[str]] = {}
 		for event in self.load_events:
 			if event.status == SkillLoadStatus.LOADED and event.phase:
-				result.setdefault(event.phase, []).append(event.skill_name, )
+				names = result.setdefault(event.phase, [])
+				if event.skill_name not in names:
+					names.append(event.skill_name)
 		return result
 
 	def available_by_phase(self) -> dict[str, list[str]]:
@@ -154,6 +174,7 @@ class SkillUsageStats(BaseModel):
 	    is_required: bool = False,
 	    error_message: str | None = None,
 	    duration_ms: float | None = None,
+	    supplied: bool = False,
 	) -> None:
 		"""
 		Record a skill load event and update aggregated lists.
@@ -165,6 +186,7 @@ class SkillUsageStats(BaseModel):
 			is_required: Whether this skill was marked as required.
 			error_message: Error details if the load failed.
 			duration_ms: Time taken to load the skill.
+			supplied: Whether the body was included directly in the prompt.
 		"""
 		event = SkillLoadEvent(
 		    skill_name=skill_name,
@@ -173,6 +195,7 @@ class SkillUsageStats(BaseModel):
 		    is_required=is_required,
 		    error_message=error_message,
 		    duration_ms=duration_ms,
+		    supplied=supplied,
 		)
 		self.load_events.append(event)
 
@@ -180,6 +203,8 @@ class SkillUsageStats(BaseModel):
 		if status == SkillLoadStatus.LOADED:
 			if skill_name not in self.loaded_skills:
 				self.loaded_skills.append(skill_name)
+			if supplied and skill_name not in self.supplied_skills:
+				self.supplied_skills.append(skill_name)
 		elif status in (SkillLoadStatus.FAILED, SkillLoadStatus.NOT_FOUND):
 			if skill_name not in self.failed_skills:
 				self.failed_skills.append(skill_name)

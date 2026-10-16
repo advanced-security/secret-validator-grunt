@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 
 from secret_validator_grunt.core.analysis import run_analysis
 from secret_validator_grunt.models.agent_config import AgentConfig
@@ -16,7 +15,7 @@ class DummySession:
 		# ignore handlers
 		return lambda: None
 
-	async def send_and_wait(self, options, timeout=None):
+	async def send_and_wait(self, prompt, *, timeout=60.0):
 		self.timeout = timeout
 
 		class DummyData:
@@ -44,10 +43,10 @@ class DummySession:
 
 		return DummyEvent()
 
-	async def destroy(self):
+	async def disconnect(self):
 		return None
 
-	async def get_messages(self):
+	async def get_events(self):
 		return []
 
 
@@ -56,7 +55,7 @@ class DummyClient:
 	def __init__(self):
 		self.session = DummySession()
 
-	async def create_session(self, *args, **kwargs):
+	async def create_session(self, **kwargs):
 		return self.session
 
 

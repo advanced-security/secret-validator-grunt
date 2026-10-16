@@ -10,9 +10,11 @@ required: true
 
 This skill provides guidance on properly cloning and accessing repository content for secret validation analysis.
 
+> **Pre-cloned repositories:** If the task prompt says the repository was pre-cloned into your workspace, use that copy and do NOT clone again. If history is missing, fetch only the commits or branches needed into the existing copy. Clone only when no copy is provided.
+
 ## Cloning Strategy
 
-Always clone the repository into your designated workspace directory to ensure isolation and proper cleanup.
+When no copy is provided, clone the repository into your designated workspace directory to ensure isolation and proper cleanup.
 
 ### Basic Clone Command
 

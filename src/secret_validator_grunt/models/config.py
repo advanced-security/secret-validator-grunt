@@ -56,7 +56,7 @@ class Config(BaseSettings):
 	    "External Copilot CLI server URL. If unset, spawns native CLI via stdio.",
 	)
 	model: str = Field(
-	    "Claude Sonnet 4.5",
+	    "claude-sonnet-5.5",
 	    alias="COPILOT_MODEL",
 	    description="Default model name",
 	)
@@ -256,8 +256,8 @@ class Config(BaseSettings):
 
 	@property
 	def output_path(self) -> Path:
-		"""Return output_dir as Path."""
-		return Path(self.output_dir)
+		"""Use the same absolute root in prompts, results, and SDK sessions."""
+		return Path(self.output_dir).resolve()
 
 	def apply_overrides(self, run_params: "RunParams") -> None:
 		"""Apply CLI overrides from RunParams onto this config.

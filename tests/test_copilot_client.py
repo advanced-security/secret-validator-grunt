@@ -1,7 +1,7 @@
 """Tests for copilot_client module."""
 from unittest.mock import patch, MagicMock
 
-import pytest
+from copilot import RuntimeConnection
 
 from secret_validator_grunt.copilot_client import create_client
 from secret_validator_grunt.models.config import Config
@@ -17,10 +17,10 @@ class TestCreateClient:
 
 		create_client(cfg)
 
-		mock_client_class.assert_called_once_with({
-		    "cli_url": "localhost:8080",
-		    "log_level": "debug",
-		})
+		mock_client_class.assert_called_once_with(
+		    connection=RuntimeConnection.for_uri("localhost:8080"),
+		    log_level="debug",
+		)
 
 	@patch("secret_validator_grunt.copilot_client.CopilotClient")
 	def test_native_stdio_mode_no_token(self, mock_client_class: MagicMock):
@@ -29,9 +29,7 @@ class TestCreateClient:
 
 		create_client(cfg)
 
-		mock_client_class.assert_called_once_with({
-		    "log_level": "info",
-		})
+		mock_client_class.assert_called_once_with(log_level="info")
 
 	@patch("secret_validator_grunt.copilot_client.CopilotClient")
 	def test_native_stdio_mode_with_token(self, mock_client_class: MagicMock):
@@ -40,12 +38,10 @@ class TestCreateClient:
 
 		create_client(cfg)
 
-		mock_client_class.assert_called_once_with({
-		    "log_level":
-		    "warning",
-		    "github_token":
-		    "ghp_test123",
-		})
+		mock_client_class.assert_called_once_with(
+		    log_level="warning",
+		    github_token="ghp_test123",
+		)
 
 	@patch("secret_validator_grunt.copilot_client.CopilotClient")
 	def test_native_mode_copilot_token(self, mock_client_class: MagicMock):
@@ -54,12 +50,10 @@ class TestCreateClient:
 
 		create_client(cfg)
 
-		mock_client_class.assert_called_once_with({
-		    "log_level":
-		    "info",
-		    "github_token":
-		    "gho_copilot_abc",
-		})
+		mock_client_class.assert_called_once_with(
+		    log_level="info",
+		    github_token="gho_copilot_abc",
+		)
 
 	@patch("secret_validator_grunt.copilot_client.CopilotClient")
 	def test_native_mode_copilot_token_precedence(
@@ -73,12 +67,10 @@ class TestCreateClient:
 
 		create_client(cfg)
 
-		mock_client_class.assert_called_once_with({
-		    "log_level":
-		    "info",
-		    "github_token":
-		    "gho_copilot_token",
-		})
+		mock_client_class.assert_called_once_with(
+		    log_level="info",
+		    github_token="gho_copilot_token",
+		)
 
 	@patch("secret_validator_grunt.copilot_client.CopilotClient")
 	def test_external_mode_ignores_token(self, mock_client_class: MagicMock):
@@ -93,6 +85,7 @@ class TestCreateClient:
 		create_client(cfg)
 
 		# Neither token should be in the options for external server mode
-		call_args = mock_client_class.call_args[0][0]
-		assert "github_token" not in call_args
-		assert call_args["cli_url"] == "localhost:8080"
+		call_kwargs = mock_client_class.call_args.kwargs
+		assert "github_token" not in call_kwargs
+		assert call_kwargs["connection"] == RuntimeConnection.for_uri(
+		    "localhost:8080")

@@ -7,8 +7,6 @@ and select the winning report based on quality metrics.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from secret_validator_grunt.models.agent_config import AgentConfig
 from secret_validator_grunt.models.config import Config
 from secret_validator_grunt.models.run_result import AgentRunResult
@@ -20,10 +18,14 @@ from secret_validator_grunt.ui.streaming import (
     ProgressCallback,
 )
 from secret_validator_grunt.integrations.copilot_tools import get_session_tools
+from secret_validator_grunt.integrations.github_evidence import GitHubEvidence
 from secret_validator_grunt.utils.paths import ensure_within
 from secret_validator_grunt.utils.logging import get_logger
 from secret_validator_grunt.utils.protocols import CopilotClientProtocol
-from secret_validator_grunt.core.skills import discover_skill_directories
+from secret_validator_grunt.core.skills import (
+    JUDGE_SKILLS_DIRECTORY,
+    discover_skill_directories_for_agent,
+)
 from secret_validator_grunt.loaders.prompts import load_prompt
 from secret_validator_grunt.core.session import (
     load_and_validate_template,
@@ -54,25 +56,35 @@ def _format_skill_usage_summary(result: AgentRunResult) -> str:
 	skipped_required = set(su.required_skills) - set(su.loaded_skills)
 
 	lines = [
-	    "\n### Methodology Compliance",
+	    "\n### Methodology Guidance",
+	    "",
+	    "Coverage measures guidance supplied or loaded, NOT proof that "
+	    "the methodology was followed. Judge phase execution from "
+	    "the report and challenger evidence.",
 	    "",
 	    "| Metric | Value |",
 	    "|--------|-------|",
 	    f"| Skills Loaded | {len(su.loaded_skills)}/{len(su.available_skills)} |",
 	    f"| Required Skills Loaded "
 	    f"| {len(loaded_required)}/{len(su.required_skills)} |",
-	    f"| Compliance Score | {su.compliance_score:.0f}% |",
+	    f"| Required Guidance Coverage | {su.compliance_score:.0f}% |",
 	    "",
 	]
-
 	if loaded_required:
 		lines.append(
 		    f"**Required Skills Loaded:** {', '.join(sorted(loaded_required))}"
 		)
+	if su.supplied_skills:
+		lines.append("**Supplied in Task Prompt:** "
+		             f"{', '.join(sorted(su.supplied_skills))}")
 	if skipped_required:
 		lines.append(
 		    f"**Required Skills Skipped:** {', '.join(sorted(skipped_required))}"
 		)
+	if su.unavailable_skills:
+		lines.append("**Unavailable at Runtime (configuration issue, not "
+		             "analyst fault):** "
+		             f"{', '.join(sorted(su.unavailable_skills))}")
 	if su.loaded_skills:
 		lines.append(
 		    f"**All Skills Loaded:** {', '.join(sorted(su.loaded_skills))}")
@@ -126,6 +138,8 @@ def _format_challenge_annotation(result: AgentRunResult, ) -> str:
 	    f"Challenge Verdict: {cr.verdict}",
 	    f"Reasoning: {cr.reasoning}",
 	]
+	if cr.workspace:
+		lines.append(f"Challenger Workspace: {cr.workspace}")
 	if cr.evidence_gaps:
 		lines.append(f"Evidence Gaps: "
 		             f"{', '.join(cr.evidence_gaps)}")
@@ -184,6 +198,7 @@ async def run_judge(
     results: list[AgentRunResult],
     run_params: RunParams,
     progress_cb: ProgressCallback | None = None,
+    evidence: GitHubEvidence | None = None,
 ) -> JudgeResult:
 	"""Run judge session to select the best report among analysis results."""
 	rp = run_params
@@ -209,7 +224,6 @@ async def run_judge(
 	    f"- Workspace: {workspace} !!! DO EVERYTHING HERE, ALWAYS !!!\n")
 	full_prompt = _build_judge_prompt(prompt, report_template, context_block,
 	                                  reports_blob)
-	agent_prompt = f"@{judge_agent.name}\n{full_prompt}"
 	stream_log_path = (
 	    workspace /
 	    f"judge-{rp.org_repo.replace('/', '_')}-{rp.alert_id}.stream.log")
@@ -221,41 +235,42 @@ async def run_judge(
 	    show_usage=config.show_usage,
 	)
 
-	session_tools = get_session_tools(
+	disabled_skills = discover_all_disabled_skills(
 	    config,
-	    rp.org_repo,
-	    rp.alert_id,
+	    JUDGE_SKILLS_DIRECTORY,
 	)
-	disabled_skills = discover_all_disabled_skills(config)
+	skill_dirs = discover_skill_directories_for_agent("judge")
+	session_tools = []
+	if judge_agent.tools == []:
+		skill_dirs = []
+	else:
+		session_tools = get_session_tools(config, rp.org_repo, rp.alert_id,
+		                                  evidence)
 
 	session = None
 	try:
-		session = await client.create_session(
-		    build_session_config(
-		        model=judge_agent.model or config.model,
-		        streaming=False,
-		        agent=judge_agent,
-		        tools=session_tools,
-		        skill_directories=[
-		            str(workspace.resolve()),
-		            *discover_skill_directories(
-		                config.analysis_skill_directories or [], ),
-		        ],
-		        disabled_skills=disabled_skills,
-		        system_message=("Respond ONLY with JSON in a fenced"
-		                        " ```json``` block, no prose."
-		                        " If uncertain, respond with"
-		                        ' {"winner_index": -1,'
-		                        ' "scores": [],'
-		                        ' "rationale":'
-		                        ' "Invalid reports",'
-		                        ' "verdict": ""}'),
-		    ))
-		session.on(collector.handler)
+		session = await client.create_session(**build_session_config(
+		    model=judge_agent.model or config.model,
+		    streaming=False,
+		    agent=judge_agent,
+		    tools=session_tools,
+		    skill_directories=skill_dirs,
+		    working_directory=str(workspace.resolve()),
+		    disabled_skills=disabled_skills,
+		    on_event=collector.handler,
+		    system_message=("Respond ONLY with JSON in a fenced"
+		                    " ```json``` block, no prose."
+		                    " If uncertain, respond with"
+		                    ' {"winner_index": -1,'
+		                    ' "scores": [],'
+		                    ' "rationale":'
+		                    ' "Invalid reports",'
+		                    ' "verdict": ""}'),
+		))
 
 		raw = await send_and_collect(
 		    session,
-		    agent_prompt,
+		    full_prompt,
 		    config.judge_timeout_seconds,
 		    collector,
 		    "judge",

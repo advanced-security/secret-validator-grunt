@@ -28,6 +28,7 @@ from secret_validator_grunt.evals.checks import run_all_checks
 from secret_validator_grunt.utils.paths import ensure_within
 from secret_validator_grunt.utils.logging import get_logger
 from secret_validator_grunt.copilot_client import create_client
+from secret_validator_grunt.integrations.github_evidence import GitHubEvidence
 
 logger = get_logger(__name__)
 
@@ -231,6 +232,7 @@ async def run_all(
 
 	client = create_client(config)
 	await client.start()
+	evidence = GitHubEvidence(config.github_token)
 	try:
 		# run analyses concurrently with optional semaphore
 		max_parallel = config.max_parallel_sessions or config.analysis_count
@@ -246,6 +248,7 @@ async def run_all(
 				    run_params=rp,
 				    progress_cb=progress_cb,
 				    pre_cloned_repo=shared_repo,
+				    evidence=evidence,
 				)
 
 		tasks = [run_one(i) for i in range(config.analysis_count)]
@@ -290,6 +293,7 @@ async def run_all(
 		    rp,
 		    progress_cb=progress_cb,
 		    alert_dir=alert_dir,
+		    evidence=evidence,
 		)
 		# Annotate each result with its challenge
 		for idx, cr in enumerate(challenge_results):
@@ -304,6 +308,7 @@ async def run_all(
 		    results,
 		    run_params=rp,
 		    progress_cb=progress_cb,
+		    evidence=evidence,
 		)
 		if (judge_result.winner_index >= 0
 		    and 0 <= judge_result.winner_index < len(results)):
@@ -319,7 +324,10 @@ async def run_all(
 					    winner.raw_markdown,
 					)
 	finally:
-		await client.stop()
+		try:
+			await client.stop()
+		finally:
+			await evidence.close()
 	logger.info("run_all done org_repo=%s alert_id=%s", rp.org_repo,
 	            rp.alert_id)
 	return RunOutcome(

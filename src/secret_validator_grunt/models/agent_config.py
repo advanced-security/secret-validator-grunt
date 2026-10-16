@@ -18,8 +18,11 @@ class AgentConfig(BaseModel):
 	    default=None, description="Short description of the agent")
 	argument_hint: str | None = Field(default=None,
 	                                  description="Argument hint for display")
-	tools: list[str] = Field(default_factory=list,
-	                         description="Available tools")
+	tools: list[str] | None = Field(
+	    default=None,
+	    description=("Allowed tool names. None (omitted) means "
+	                 "unrestricted; an empty list means no tools."),
+	)
 	model: str | None = Field(default=None, description="Override model name")
 	report_template: str | None = Field(
 	    default=None, description="Optional report template body")

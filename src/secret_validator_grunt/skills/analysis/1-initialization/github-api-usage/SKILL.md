@@ -17,7 +17,7 @@ You have access to these custom tools for GitHub Secret Scanning:
 | Tool | Purpose |
 |------|---------|
 | `gh_secret_scanning_alert` | Fetch complete alert details including state, type, validity |
-| `gh_secret_scanning_alert_locations` | Fetch all locations where the secret was found |
+| `gh_secret_scanning_alert_locations` | Fetch one page of complete location details |
 
 ## Workflow
 
@@ -30,26 +30,42 @@ gh_secret_scanning_alert(repo="owner/repo", alert_number=1)
 ```
 
 This returns:
+- `secret` - The actual value to verify; do not substitute a guessed value
 - `secret_type` - The type of secret detected
 - `state` - Current alert state (open/resolved)
 - `validity` - GitHub's validity assessment (unknown/valid/invalid)
 - `created_at` - When the alert was created
 - `updated_at` - Last update timestamp
 - `push_protection_bypassed` - If push protection was bypassed
+- `resolution` and related fields - Resolution evidence, not proof of validity
+- `fetched_at` - UTC time this snapshot was fetched
+
+All alert fields are returned. Successful responses are shared across agents
+within this run; do not fetch the same facts again through shell commands.
+Use `refresh=true` when you need current state, such as checking a change in
+resolution or rotation. A cached snapshot is not a fresh provider validation.
 
 ### Step 2: Fetch Location Details
 
-Then call `gh_secret_scanning_alert_locations` to get all locations:
+Fetch location pages as needed for context, retaining the same `per_page`:
 
 ```
-gh_secret_scanning_alert_locations(repo="owner/repo", alert_number=1)
+gh_secret_scanning_alert_locations(repo="owner/repo", alert_number=1, page=1, per_page=50)
 ```
 
-This returns an array of locations with:
-- `path` - File path where secret was found
-- `start_line` / `end_line` - Line numbers
-- `commit_sha` - The commit containing the secret
-- `details` - Additional context about the location
+This returns `locations`, `locations_count` (this page only), `page`,
+`per_page`, `next_page`, and `fetched_at`. Each location preserves its `type`
+and complete `details`, including paths, lines, and commit SHAs where present.
+Issue, pull request, discussion, and wiki locations need not have file paths;
+use their specific details instead of assuming every location is a commit.
+
+Follow `next_page` until it is null before claiming complete coverage.
+Inspect relevant context incrementally instead of fetching every file in
+the repository. If you stop early, state which location pages or sources
+remain unexamined. An error is missing evidence, not an empty location set.
+To refresh the entire set, restart at page 1 with `refresh=true` and repeat
+that flag on subsequent pages. Pages are independent snapshots, not an
+atomic snapshot of GitHub.
 
 ## Key Information to Extract
 
@@ -74,7 +90,6 @@ Secrets may exist in commits that are no longer on the default branch. The locat
 
 After gathering this information:
 
-1. Proceed to Phase 2 (Context Gathering) to clone the repository
+1. Proceed to Phase 2 (Context Gathering) to inspect the provided repository copy
 2. Use the location data to identify files to analyze
 3. Check the secret type to determine verification approach
-

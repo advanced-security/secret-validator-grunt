@@ -7,20 +7,33 @@ applyTo: "**"
 
 ## Project Identity
 
-This is a Python CLI tool that validates GitHub secret scanning alerts using AI-driven multi-agent consensus. It uses the **GitHub Copilot SDK** (`github-copilot-sdk`) to run Copilot sessions over JSON-RPC.
+This is a Python CLI tool that investigates GitHub secret scanning alerts using independent analyses, adversarial challenges, and judge selection, not a majority vote. It uses the **GitHub Copilot SDK** (`github-copilot-sdk`) to run Copilot sessions over JSON-RPC.
 
 Entry point: `main.py:entrypoint()` → Typer CLI → `core/runner.py:run_all()`.
 
+## Quick Onboarding
+
+Paths such as `core/` and `models/` below are relative to `src/secret_validator_grunt/`.
+
+1. Read `README.md`, then `docs/architecture.md` for the workflow and its limits.
+2. Use `docs/code-structure.md` to find the owning module and companion tests; follow only the path relevant to the task.
+3. Read `models/config.py` for recognized settings and `agents/*.agent.md` for effective models/tools. Agent model overrides take precedence over `COPILOT_MODEL`; `.env.example` values are examples, not defaults.
+4. Use `docs/development.md` for setup and checks. Run `uv run --extra dev pytest tests/ -q`; format with `uv run fmt` and check with `uv run fmt-check`.
+
+These are developer instructions. Application-created stage sessions skip repository custom instructions; change `agents/`, `prompts/`, and `skills/` to change their methodology. Read `docs/operational-risks.md` before any live validation.
+
 ## Architecture at a Glance
 
-- **Pre-clone**: Repository cloned once to `_shared_repo/`; each analysis workspace receives a copy
+- **Pre-clone**: Prepare `_shared_repo/`; each analysis workspace receives a copy. An existing shared clone is reused, not automatically refreshed
 - **N parallel analysis agents** examine a secret alert independently (default 3)
-- **N parallel challenger agents** adversarially validate each report by inspecting the workspace
+- **N parallel challenger agents** inspect original evidence read-only and rerun checks in separate working copies
 - A **judge agent** reviews all analysis reports with challenge annotations and selects the best one
-- Each session runs in its own Copilot session with tools and skills injected
-- Sessions use continuation prompts to recover from early model termination
+- Each stage gets its own Copilot session and agent definition; the default judge has `tools: []` and no skill directories
+- Analysis sessions use bounded continuation prompts for short or empty responses; challenger and judge calls currently do not
+- One `integrations/github_evidence.py:GitHubEvidence` instance shares GitHub reads within a run; live provider checks are never cached
+- `core/challenge_workspace.py` protects `scripts/`, `logs/`, `artifacts/`, and `report.md`; integrity failures force `INSUFFICIENT_EVIDENCE`. The repository and runtime environments are outside that protection, which is not a sandbox
 - Results flow through `StreamCollector` which captures events, usage, and tool calls
-- The TUI (Rich Live) renders real-time progress (3 tables: analysis, challenger, judge) and a final summary
+- The TUI (Rich Live) renders real-time progress (3 tables: analysis, challenger, judge) and a final summary; logging must use the same Rich console to avoid corrupting redraws
 
 Key data flow: `CLI → Config → runner.run_all → pre_clone → analysis × N → challenge × N → judge → RunOutcome → TUI`
 
@@ -45,17 +58,17 @@ This structure was migrated from a flat `services/` directory. The `services/` d
 
 ## Critical Config Gotcha
 
-`Config` uses `pydantic_settings.BaseSettings` with **alias-based env var names**. When constructing Config in code or tests, you MUST use the alias (the env var name), NOT the field name:
+`Config` uses `pydantic_settings.BaseSettings` with **alias-based env var names**. Use the aliases when constructing Config in new code or tests so settings match their documented environment names:
 
 ```python
 # ✅ Correct — alias name
 Config(SHOW_USAGE=True, ANALYSIS_COUNT=5)
 
-# ❌ Wrong — field name. Silently ignored, keeps default.
+# Avoid — field names obscure the environment-variable mapping.
 Config(show_usage=True, analysis_count=5)
 ```
 
-This is the single most common source of subtle test bugs in this project.
+Current dependency versions accept field names too; the former warning that they are silently ignored is outdated. Alias-based construction remains the project convention. Use `models/config.py` as the source of truth rather than guessing setting names.
 
 ## Implementation Workflow
 
@@ -77,23 +90,26 @@ The post-implementation review step has caught real bugs:
 
 ## Code Conventions
 
+These project-specific rules take precedence over generic Python examples. They apply to new or changed code; existing legacy code is not proof of a different convention.
+
 - **Indentation**: 1 tab per level (NOT spaces). The project uses tabs throughout.
 - **Type hints**: Required on all function signatures.
 - **Docstrings**: PEP 257, immediately after `def`/`class`.
 - **One class per file** in `models/` unless classes are tightly coupled.
-- **Pydantic**: All data models inherit `BaseModel`. Use `Field(description=...)` for documentation.
-- **Async**: All I/O-bound operations (Copilot sessions, file writes in analysis) are async.
+- **Pydantic**: New data models inherit `BaseModel`. Use `Field(description=...)` for documentation.
+- **Async**: Keep blocking I/O off the event loop. Follow the existing async session calls and `asyncio.to_thread` boundaries for blocking GitHub reads and evidence copying.
 - **Imports**: Use absolute imports from `secret_validator_grunt.*`. No relative imports.
 
 ## Testing Conventions
 
 - Framework: `pytest` + `pytest-asyncio` (strict mode — must mark async tests with `@pytest.mark.asyncio`)
 - Test files: `tests/test_<module>.py`
-- Run: `uv run pytest tests/ -q`
+- Run: `uv run --extra dev pytest tests/ -q`
 - **Inline dummy objects** preferred over complex mock hierarchies
 - Use `tmp_path` fixture for file system tests
 - Config in tests: always use alias names (see Config Gotcha above)
-- Current baseline: **410 tests**
+- Last verified baseline: **576 passed (2026-10-16)**. Measure a fresh baseline before implementation; this count is not an invariant.
+- For selected files, use `uv run fmt --in-place <files>` and `uv run fmt-check --diff <files>`; explicit arguments replace the formatter wrapper's defaults.
 
 ## Skills System
 
@@ -114,7 +130,11 @@ skills/
   judge/                 # Judge agent skills (empty — .gitkeep)
 ```
 
-Each skill has a `SKILL.md` with YAML frontmatter (`required: true/false`, `hidden: true`). The manifest generator (`core/skills.py`) auto-discovers skills per-agent at startup via `discover_skill_directories_for_agent(agent_type)`.
+Each skill has a `SKILL.md` with YAML frontmatter: `name` and `description` are required; `required`, `phase`, `agent`, and `secret-type` describe its use. The manifest generator (`core/skills.py`) auto-discovers skills per-agent at startup via `discover_skill_directories_for_agent(agent_type)`.
+
+For analysis and challenger sessions, enabled required skill bodies are embedded in the task prompt in phase order. Optional guides are listed for on-demand use. `DISABLED_SKILLS` excludes named guides; entries under `_` and `.` directories within scanned skill roots are excluded from the manifest. `hidden: true` alone is not an app-level disabling switch, and there is no `PRELOAD_REQUIRED_SKILLS` setting.
+
+The default judge has no tools or skills; change its agent definition and task prompt for judge guidance. Guidance coverage records delivery/loading, not compliance. Use `docs/skills-and-agents.md` for a complete skill example and the custom tool contracts.
 
 Valid agent types: `analysis`, `challenger`, `judge`.
 
@@ -178,6 +198,7 @@ Do NOT use overlapping ranges or dict-based lookups for boundaries — use expli
 ## What to Avoid
 
 - Do NOT mutate third-party module namespaces (monkey-patching attributes onto imported modules)
+- Reuse `integrations/github.py` for GitHub reads: ghapi 2.x uses `sync=True` here, and nested fastcore collections must be normalized with `obj2dict` before JSON serialization
 - Do NOT put models in the wrong directory (e.g., don't put data models in `core/` or `integrations/`)
 - Do NOT use field names when constructing Config — always use aliases
 - Do NOT add code to `services/` — it was removed during refactoring
@@ -192,8 +213,8 @@ Do NOT use overlapping ranges or dict-based lookups for boundaries — use expli
 | Package | Purpose |
 |---------|---------|
 | `github-copilot-sdk` | Copilot session management via JSON-RPC |
-| `ghapi` | GitHub REST API client |
-| `validate-secrets` | Deterministic secret validators (optional) |
+| `ghapi` | GitHub REST API client (2.x, used with `sync=True`) |
+| `validate-secrets` | Installed by default; deterministic validators for supported secret types, not every provider |
 | `rich` | Terminal UI rendering |
 | `typer` | CLI framework |
 | `pydantic` / `pydantic-settings` | Data models and config |
@@ -204,24 +225,28 @@ Do NOT use overlapping ranges or dict-based lookups for boundaries — use expli
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `COPILOT_CLI_URL` | None | External Copilot CLI server URL |
-| `COPILOT_MODEL` | Claude Sonnet 4.5 | Model for analysis sessions |
+| `COPILOT_MODEL` | claude-sonnet-5.5 | Fallback model when the stage's agent definition does not specify one |
 | `ANALYSIS_COUNT` | 3 | Parallel analysis count |
+| `MAX_PARALLEL_SESSIONS` | None | Limit concurrent analysis or challenger sessions within a stage |
 | `ANALYSIS_TIMEOUT_SECONDS` | 1800 | Per-analysis timeout (seconds) |
 | `JUDGE_TIMEOUT_SECONDS` | 300 | Judge session timeout (seconds) |
 | `CHALLENGER_TIMEOUT_SECONDS` | 300 | Per-challenge timeout (seconds) |
 | `CHALLENGER_AGENT_FILE` | agents/challenger.agent.md | Challenger agent definition path |
 | `CHALLENGER_SKILL_DIRECTORIES` | [] | Additional challenger skill root directories |
-| `MAX_CONTINUATION_ATTEMPTS` | 2 | Max continuation prompts per session |
-| `MIN_RESPONSE_LENGTH` | 500 | Minimum response length before triggering continuation |
+| `ANALYSIS_SKILL_DIRECTORIES` | [] | Additional analysis skill roots; `SKILL_DIRECTORIES` is a legacy alias |
+| `DISABLED_SKILLS` | [] | Skill names excluded from guidance and runtime loading |
+| `MAX_CONTINUATION_ATTEMPTS` | 2 | Max continuation prompts per analysis session |
+| `MIN_RESPONSE_LENGTH` | 500 | Minimum analysis response length before triggering continuation |
 | `SHOW_USAGE` | false | Enable diagnostics display and persistence |
 | `GITHUB_TOKEN` | None | GitHub API authentication and git clone auth |
 | `COPILOT_TOKEN` | None | Copilot CLI authentication (falls back to GITHUB_TOKEN) |
-| `STREAM_VERBOSE` | false | Stream raw deltas to console |
+| `STREAM_VERBOSE` | false | Show detailed streaming updates in the TUI |
 | `OUTPUT_DIR` | analysis | Base output directory |
 
 ## Reference
 
 Deeper documentation lives in `docs/`:
+- `docs/README.md` — Onboarding reading order and guide index
 - `docs/architecture.md` — Design philosophy and data flow
 - `docs/code-structure.md` — Module-by-module breakdown
 - `docs/skills-and-agents.md` — Skills, agents, tools, prompts

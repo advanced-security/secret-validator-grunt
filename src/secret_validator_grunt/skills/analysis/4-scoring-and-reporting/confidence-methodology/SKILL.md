@@ -130,9 +130,9 @@ Overall Score = (Recency + Directness + Completeness + Source Reliability
 
 | Average Score | Confidence Level |
 | ------------- | ---------------- |
-| 8.0 - 10.0 | High |
-| 5.0 - 7.9 | Medium |
-| 0.0 - 4.9 | Low |
+| 7.0 <= score <= 10.0 | High |
+| 4.0 <= score < 7.0 | Medium |
+| 0.0 <= score < 4.0 | Low |
 
 ## Report Format
 
@@ -151,7 +151,7 @@ Include this table in Section 7 of your report:
 | Test Results            | 6     | Format valid; endpoint unreachable               |
 | Findings Review         | 7     | Review confirms exposure, password strength low  |
 
-**Average:** **7.1/10** → **Medium**
+**Average:** **7.1/10** → **High**
 ```
 
 ## Evidence Requirements

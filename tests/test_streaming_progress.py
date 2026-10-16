@@ -1,5 +1,5 @@
 import pytest
-import asyncio
+from pathlib import Path
 
 from secret_validator_grunt.core.analysis import run_analysis
 from secret_validator_grunt.models.agent_config import AgentConfig
@@ -26,7 +26,7 @@ class DummySession:
 		self._handler = handler
 		return lambda: None
 
-	async def send_and_wait(self, options, timeout=None):
+	async def send_and_wait(self, prompt, *, timeout=60.0):
 		# simulate streaming
 		if self._handler:
 			self._handler(
@@ -66,10 +66,10 @@ class DummySession:
 	async def abort(self):
 		self.aborted = True
 
-	async def destroy(self):
+	async def disconnect(self):
 		self.destroyed = True
 
-	async def get_messages(self):
+	async def get_events(self):
 		return []
 
 
@@ -78,7 +78,9 @@ class DummyClient:
 	def __init__(self, session=None):
 		self.session = session or DummySession()
 
-	async def create_session(self, *args, **kwargs):
+	async def create_session(self, **kwargs):
+		if kwargs.get("on_event"):
+			self.session.on(kwargs["on_event"])
 		return self.session
 
 
@@ -131,7 +133,8 @@ async def test_streaming_progress_verbose():
 @pytest.mark.asyncio
 async def test_streaming_usage_accumulates(tmp_path):
 	from secret_validator_grunt.ui.streaming import StreamCollector
-	from copilot.generated.session_events import QuotaSnapshot
+	from datetime import timedelta
+	from types import SimpleNamespace
 	msgs = []
 	collector = StreamCollector(
 	    run_id="1",
@@ -148,34 +151,19 @@ async def test_streaming_usage_accumulates(tmp_path):
 
 	collector.handler(
 	    ev(SessionEventType.ASSISTANT_USAGE, input_tokens=10, output_tokens=5,
-	       cost=0.1))
+	       cost=0.1, duration=timedelta(milliseconds=1500)))
 	assert collector.usage.input_tokens == 10
+	assert collector.usage.duration == 1.5
 	assert collector.usage.output_tokens == 5
 	assert collector.usage.cost == 0.1
 	assert msgs == []
 
-	q1 = QuotaSnapshot(
-	    entitlement_requests=100,
-	    is_unlimited_entitlement=False,
-	    overage=0,
-	    overage_allowed_with_exhausted_quota=False,
-	    remaining_percentage=100,
-	    usage_allowed_with_exhausted_quota=True,
-	    used_requests=10,
-	)
+	q1 = SimpleNamespace(used_requests=10)
 	collector.handler(
 	    ev(SessionEventType.SESSION_USAGE_INFO, current_tokens=200,
 	       token_limit=1000, quota_snapshots={"premier": q1}))
 
-	q2 = QuotaSnapshot(
-	    entitlement_requests=100,
-	    is_unlimited_entitlement=False,
-	    overage=0,
-	    overage_allowed_with_exhausted_quota=False,
-	    remaining_percentage=90,
-	    usage_allowed_with_exhausted_quota=True,
-	    used_requests=12,
-	)
+	q2 = SimpleNamespace(used_requests=12)
 	collector.handler(
 	    ev(SessionEventType.SESSION_USAGE_INFO, current_tokens=300,
 	       token_limit=1000, quota_snapshots={"premier": q2}))
@@ -685,3 +673,118 @@ def test_write_stream_success(tmp_path):
 	collector._write_stream("hello ")
 	collector._write_stream("world")
 	assert log_path.read_text() == "hello world"
+
+
+def _supplied_collector(tmp_path):
+	"""Build a collector with a two-skill manifest."""
+	from secret_validator_grunt.models.skill import SkillInfo, SkillManifest
+	from secret_validator_grunt.ui.streaming import StreamCollector
+
+	manifest = SkillManifest(
+	    skills=[
+	        SkillInfo(name="skill-a", description="A", path="/a",
+	                  phase="1-init", required=True),
+	        SkillInfo(name="skill-b", description="B", path="/b",
+	                  phase="2-gather", required=False),
+	    ],
+	    phases=["1-init", "2-gather"],
+	)
+	return StreamCollector(
+	    run_id="1",
+	    stream_log_path=tmp_path / "s.log",
+	    skill_manifest=manifest,
+	)
+
+
+def _ev(et, **kwargs):
+	return type("E", (), {"type": et, "data": type("D", (), kwargs)})
+
+
+def test_required_prompt_content_tracked_as_supplied(tmp_path):
+	"""Prompt inclusion is recorded without depending on runtime events."""
+	collector = _supplied_collector(tmp_path)
+	collector.record_supplied_skills(["skill-a"])
+
+	stats = collector.finalize_skill_usage()
+	assert stats.loaded_skills == ["skill-a"]
+	assert stats.supplied_skills == ["skill-a"]
+	assert stats.compliance_score == 100.0
+	event = stats.load_events[0]
+	assert event.supplied is True
+	assert event.is_required is True
+	assert event.phase == "1-init"
+
+
+def test_skill_invoked_agent_trigger_not_double_counted(tmp_path):
+	"""Skill tool calls are tracked once, via tool execution events."""
+	from copilot.generated.session_events import SkillInvokedTrigger
+
+	collector = _supplied_collector(tmp_path)
+	collector.handler(
+	    _ev(SessionEventType.TOOL_EXECUTION_START, tool_call_id="c1",
+	        tool_name="skill", arguments={"skill": "skill-b"}))
+	collector.handler(
+	    _ev(SessionEventType.SKILL_INVOKED, name="skill-b",
+	        trigger=SkillInvokedTrigger.AGENT_INVOKED))
+	collector.handler(
+	    _ev(SessionEventType.TOOL_EXECUTION_COMPLETE, tool_call_id="c1",
+	        success=True, error=None))
+
+	stats = collector.skill_usage
+	assert len(stats.load_events) == 1
+	assert stats.load_events[0].supplied is False
+	assert stats.supplied_skills == []
+
+
+def test_supplied_content_deduplicated(tmp_path):
+	"""Recording the same supplied guide twice does not inflate coverage."""
+	collector = _supplied_collector(tmp_path)
+	for _ in range(2):
+		collector.record_supplied_skills(["skill-a"])
+	assert len(collector.skill_usage.load_events) == 1
+
+
+def test_optional_skill_real_sdk_events(tmp_path: Path) -> None:
+	"""Native SDK event shapes preserve optional skill call accounting."""
+	from datetime import datetime, timezone
+	from uuid import uuid4
+	from copilot.generated.session_events import (
+	    SessionEvent,
+	    ToolExecutionStartData,
+	    ToolExecutionCompleteData,
+	)
+
+	collector = _supplied_collector(tmp_path)
+	for event_type, data in [
+	    (SessionEventType.TOOL_EXECUTION_START,
+	     ToolExecutionStartData(tool_call_id="call", tool_name="skill",
+	                            arguments={"skill": "skill-b"})),
+	    (SessionEventType.TOOL_EXECUTION_COMPLETE,
+	     ToolExecutionCompleteData(success=True, tool_call_id="call")),
+	]:
+		collector.handler(
+		    SessionEvent(id=uuid4(), timestamp=datetime.now(timezone.utc),
+		                 type=event_type, data=data))
+	stats = collector.finalize_skill_usage()
+	assert stats.loaded_skills == ["skill-b"]
+	assert stats.supplied_skills == []
+	assert stats.skipped_required == ["skill-a"]
+	assert stats.compliance_score == 0
+
+
+def test_disabled_required_skills_do_not_reduce_coverage(
+        tmp_path: Path) -> None:
+	"""An intentional exclusion is not an analyst methodology failure."""
+	from secret_validator_grunt.models.skill import SkillInfo, SkillManifest
+	from secret_validator_grunt.ui.streaming import StreamCollector
+
+	collector = StreamCollector(
+	    run_id="1", stream_log_path=tmp_path / "stream.log",
+	    skill_manifest=SkillManifest(
+	        skills=[SkillInfo(name="off", path="/off", required=True)]),
+	    disabled_skills=["off"])
+	stats = collector.finalize_skill_usage()
+	assert stats.required_skills == []
+	assert stats.available_skills == []
+	assert stats.skipped_required == []
+	assert stats.compliance_score == 100

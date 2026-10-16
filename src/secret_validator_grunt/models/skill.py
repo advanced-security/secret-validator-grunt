@@ -37,8 +37,10 @@ class SkillInfo(BaseModel):
 	                          description="Phase this skill belongs to")
 	secret_type: str | None = Field(
 	    default=None, description="Secret type this skill applies to")
-	required: bool = Field(default=False,
+	required: bool = Field(default=False, strict=True,
 	                       description="Whether this skill must be loaded")
+	content: str = Field(default="", exclude=True, repr=False,
+	                     description="Skill body read during discovery")
 	agent: str = Field(default="analysis",
 	                   description="Agent type: analysis, challenger, judge")
 

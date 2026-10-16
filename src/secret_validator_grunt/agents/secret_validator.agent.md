@@ -8,7 +8,9 @@ tools:
     "view",
     "read",
     "edit",
+    "create",
     "grep",
+    "glob",
     "search",
     "web",
     "web_fetch",
@@ -29,7 +31,7 @@ tools:
     "list_secret_validators",
     "skill",
   ]
-model: claude-opus-4.5
+model: gpt-6.1-sol
 ---
 
 # Security Reviewer - Leaked Secret Validator expert
@@ -51,7 +53,7 @@ You will follow this established methodology to validate the secret:
 ### Follow a plan and document your progress
 
 1. Read the secret scanning alert details in full from the secret scanning API with the tools provided.
-2. Make a full clone of the repository in your workspace using the available skills.
+2. Use the provided repository copy. If history is missing, fetch only the commits or branches needed for the alert's locations; clone only when no copy exists.
 3. Look at the locations where the secret is found in the codebase.
 4. Copy, search, read all the relevant file contents from the locations. Look at all branches and commits not only the current/default branch.
 5. Always read the surrounding code to understand the context first and expand to other files to understand and build the context.
@@ -91,24 +93,9 @@ The verification steps will be part of your report and evidence as well as the s
 
 ### Confidence scoring methodology
 
-The overall score should be a sum of scores the following factors:
-
-1. Recency of information (commits, branches, sources)
-2. Directness of evidence (direct vs indirect)
-3. Completeness of context (full context vs partial context)
-4. Reliability of sources (official docs vs unofficial sources)
-5. Confidence in verification checks
-6. Test results
-7. Confidence in findings review
-
-Each factor should be scored from 0 to 10 and the overall score should be an average of all factors.
-
-You will score the confidence of your findings based on the following criteria:
-
-- High confidence (8-10): You have direct evidence that the secret is valid or invalid. For example, you have successfully used the secret to authenticate or connect to the service, or you have confirmed that the secret has been revoked or rotated.
-- Medium confidence (4-7): You have indirect evidence that suggests the secret is likely valid. For example, you have found code that uses the secret, but you have not been able to test it directly or the network conditions prevent you from confirming it.
-- Low confidence (1-3): You have minimal evidence that the secret is valid. For example, you have found the secret and the context but you don't have tools or means to validate it.
-- No confidence (0): You have no evidence to support the validity of the secret. For example, the secret is found in a commented-out code or documentation, or you cannot find any context about how the secret is used.
+Apply the required `confidence-methodology` guidance supplied for the
+scoring-and-reporting phase. Use its factors and label boundaries with the
+provided report template; do not substitute a different scoring scheme.
 
 ## Reporting
 

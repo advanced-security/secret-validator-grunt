@@ -11,6 +11,11 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+from secret_validator_grunt.core.challenge_workspace import (
+    changed_evidence,
+    prepare_challenge_workspace,
+)
+from secret_validator_grunt.models.challenge_workspace import ChallengeWorkspace
 from secret_validator_grunt.models.agent_config import AgentConfig
 from secret_validator_grunt.models.config import Config
 from secret_validator_grunt.models.challenge_result import (
@@ -19,6 +24,7 @@ from secret_validator_grunt.models.challenge_result import (
 )
 from secret_validator_grunt.models.run_result import AgentRunResult
 from secret_validator_grunt.models.run_params import RunParams
+from secret_validator_grunt.integrations.github_evidence import GitHubEvidence
 from secret_validator_grunt.utils.parsing import extract_json
 from secret_validator_grunt.ui.streaming import (
     StreamCollector,
@@ -29,6 +35,7 @@ from secret_validator_grunt.core.session import (
     destroy_session_safe,
     discover_all_disabled_skills,
     build_session_config,
+    verify_runtime_skills,
 )
 from secret_validator_grunt.utils.logging import get_logger
 from secret_validator_grunt.utils.protocols import CopilotClientProtocol
@@ -36,6 +43,7 @@ from secret_validator_grunt.core.skills import (
     discover_challenger_skill_directories,
     build_skill_manifest,
     format_manifest_for_context,
+    required_skill_names,
     CHALLENGER_SKILLS_DIRECTORY,
 )
 from secret_validator_grunt.loaders.prompts import load_prompt
@@ -50,6 +58,7 @@ def build_challenge_prompt(
     prompt_template: str,
     run_params: RunParams,
     skill_manifest_context: str | None = None,
+    challenge_workspace_path: str | None = None,
 ) -> str:
 	"""Compose challenge prompt with report and workspace.
 
@@ -63,21 +72,24 @@ def build_challenge_prompt(
 		prompt_template: Loaded challenge prompt template.
 		run_params: Run parameters for context.
 		skill_manifest_context: Formatted skill manifest.
+		challenge_workspace_path: Independent writable workspace for reruns.
 
 	Returns:
 		Composed prompt string.
 	"""
-	prompt = prompt_template.replace("{{report_markdown}}", report_markdown
-	                                 or "")
+	parts = [prompt_template]
+	if skill_manifest_context:
+		parts.append(skill_manifest_context)
+	prompt = "\n\n".join(parts)
 	prompt = prompt.replace(
 	    "{{workspace_path}}",
 	    workspace_path or "(no workspace available)",
 	)
-
-	parts = [prompt]
-	if skill_manifest_context:
-		parts.append(skill_manifest_context)
-	return "\n\n".join(parts)
+	prompt = prompt.replace(
+	    "{{challenge_workspace_path}}",
+	    challenge_workspace_path or "(no challenger workspace available)",
+	)
+	return prompt.replace("{{report_markdown}}", report_markdown or "")
 
 
 def parse_challenge_result(raw: str) -> ChallengeResult:
@@ -135,12 +147,12 @@ async def run_single_challenge(
     challenge_index: int,
     progress_cb: ProgressCallback | None = None,
     alert_dir: Path | None = None,
+    evidence: GitHubEvidence | None = None,
 ) -> ChallengeResult:
 	"""Challenge a single analysis report.
 
-	Creates a Copilot session with access to the analysis
-	workspace and GitHub API tools, sends the challenge
-	prompt, and parses the response.
+	Protects analyst evidence and runs a Copilot session in a separate
+	working copy. Checks original integrity before persisting the result.
 
 	Parameters:
 		client: Copilot client instance.
@@ -150,7 +162,8 @@ async def run_single_challenge(
 		run_params: Run parameters for context.
 		challenge_index: Index of this challenge (for logging).
 		progress_cb: Optional progress callback.
-		alert_dir: Alert output directory for stream logs.
+		alert_dir: Parent output directory for challenge workspaces.
+		evidence: Shared GitHub reads for this pipeline run.
 
 	Returns:
 		Parsed ChallengeResult.
@@ -170,7 +183,6 @@ async def run_single_challenge(
 	skill_dirs = discover_challenger_skill_directories(
 	    config.challenger_skill_directories or [], )
 	skill_manifest = build_skill_manifest(skill_dirs)
-	skill_manifest_context = format_manifest_for_context(skill_manifest)
 
 	# Discover hidden skills (underscore-prefixed) to disable
 	disabled_skills = discover_all_disabled_skills(
@@ -178,68 +190,69 @@ async def run_single_challenge(
 	    CHALLENGER_SKILLS_DIRECTORY,
 	)
 
-	prompt = build_challenge_prompt(
-	    report_md,
-	    workspace_path,
-	    prompt_template,
-	    run_params,
-	    skill_manifest_context=skill_manifest_context,
+	skill_manifest_context = format_manifest_for_context(
+	    skill_manifest,
+	    disabled=disabled_skills,
 	)
-	agent_prompt = f"@{agent.name}\n{prompt}"
+
 	session_tools = get_session_tools(
 	    config,
 	    run_params.org_repo,
 	    run_params.alert_id,
+	    evidence,
 	)
 	chosen_model = agent.model or config.model
 
-	# Include analysis workspace in skill_directories so
-	# the Copilot SDK indexes its contents
-	session_skill_dirs = [
-	    *([str(Path(workspace_path).resolve())] if workspace_path else []),
-	    *skill_dirs,
-	]
-
-	stream_log_path: Path | None = None
-	if alert_dir:
-		slug = run_params.org_repo.replace("/", "_")
-		log_name = (f"challenge-{challenge_index}"
-		            f"-{slug}-{run_params.alert_id}"
-		            f".stream.log")
-		stream_log_path = alert_dir / log_name
-	elif workspace_path:
-		stream_log_path = (Path(workspace_path) / "challenge.stream.log")
-
-	collector = StreamCollector(
-	    run_id=run_id,
-	    stream_log_path=stream_log_path,
-	    stream_verbose=config.stream_verbose,
-	    progress_cb=progress_cb,
-	    show_usage=config.show_usage,
-	    skill_manifest=skill_manifest,
-	    disabled_skills=disabled_skills,
-	)
-
 	session = None
+	workspace: ChallengeWorkspace | None = None
+	collector: StreamCollector | None = None
+	cr = ChallengeResult(verdict="INSUFFICIENT_EVIDENCE",
+	                     reasoning="Challenge did not complete")
 	try:
-		session = await client.create_session(
-		    build_session_config(
-		        model=chosen_model,
-		        streaming=False,
-		        agent=agent,
-		        tools=session_tools,
-		        skill_directories=session_skill_dirs,
-		        disabled_skills=disabled_skills,
-		        system_message=("Respond ONLY with JSON in a fenced "
-		                        "```json``` block, no prose."),
-		        session_id=(f"{run_params.session_id_prefix}"
-		                    f"-{run_id}"),
-		    ))
-		session.on(collector.handler)
+		if not workspace_path:
+			raise ValueError("No analysis workspace available for challenge")
+		source = Path(workspace_path)
+		workspace = await prepare_challenge_workspace(
+		    source, alert_dir if alert_dir is not None else source.parent)
+		prompt = build_challenge_prompt(
+		    report_md,
+		    str(workspace.analysis),
+		    prompt_template,
+		    run_params,
+		    skill_manifest_context=skill_manifest_context,
+		    challenge_workspace_path=str(workspace.working_directory),
+		)
+		collector = StreamCollector(
+		    run_id=run_id,
+		    stream_log_path=workspace.root / "stream.log",
+		    stream_verbose=config.stream_verbose,
+		    progress_cb=progress_cb,
+		    show_usage=config.show_usage,
+		    skill_manifest=skill_manifest,
+		    disabled_skills=disabled_skills,
+		)
+		session = await client.create_session(**build_session_config(
+		    model=chosen_model,
+		    streaming=False,
+		    agent=agent,
+		    tools=session_tools,
+		    skill_directories=skill_dirs,
+		    working_directory=str(workspace.working_directory),
+		    disabled_skills=disabled_skills,
+		    system_message=("Respond ONLY with JSON in a fenced "
+		                    "```json``` block, no prose."),
+		    session_id=(f"{run_params.session_id_prefix}"
+		                f"-{run_id}"),
+		    on_event=collector.handler,
+		))
+		await verify_runtime_skills(session, skill_manifest, disabled_skills,
+		                            collector, run_id, progress_cb)
+		collector.record_supplied_skills(
+		    required_skill_names(skill_manifest, disabled_skills))
 
 		raw = await send_and_collect(
 		    session,
-		    agent_prompt,
+		    prompt,
 		    config.challenger_timeout_seconds,
 		    collector,
 		    run_id,
@@ -248,11 +261,6 @@ async def run_single_challenge(
 		)
 		cr = parse_challenge_result(raw or "")
 
-		# Capture usage from collector when --show-usage is active
-		if config.show_usage:
-			cr.usage = collector.usage
-			cr.skill_usage = collector.finalize_skill_usage()
-			cr.tool_usage = collector.tool_usage
 	except Exception as exc:
 		logger.warning(
 		    "challenge %d failed: %s",
@@ -265,6 +273,12 @@ async def run_single_challenge(
 		)
 	finally:
 		await destroy_session_safe(session, run_id)
+		if collector is not None and config.show_usage:
+			cr.usage = collector.usage
+			cr.skill_usage = collector.finalize_skill_usage()
+			cr.tool_usage = collector.tool_usage
+		if workspace is not None:
+			await _finalize_challenge(workspace, cr)
 
 	if progress_cb:
 		progress_cb(run_id, f"verdict={cr.verdict}")
@@ -276,6 +290,39 @@ async def run_single_challenge(
 	return cr
 
 
+async def _finalize_challenge(
+    workspace: ChallengeWorkspace,
+    result: ChallengeResult,
+) -> None:
+	"""Check original integrity and persist the host-annotated challenge result."""
+	result.workspace = str(workspace.root)
+	integrity_error = None
+	try:
+		changed = await changed_evidence(workspace)
+		if changed:
+			integrity_error = "Original evidence changed: " + ", ".join(
+			    changed)
+	except (OSError, ValueError) as exc:
+		integrity_error = f"Cannot verify original evidence integrity: {exc}"
+	if integrity_error:
+		logger.warning("%s: %s", workspace.root, integrity_error)
+		result.verdict = "INSUFFICIENT_EVIDENCE"
+		result.reasoning = f"{integrity_error}\n{result.reasoning}"
+		result.evidence_gaps.append(integrity_error)
+	try:
+		await asyncio.to_thread(
+		    (workspace.root / "result.json").write_text,
+		    result.model_dump_json(indent=2),
+		    encoding="utf-8",
+		)
+	except OSError as exc:
+		message = f"Cannot persist challenge result: {exc}"
+		logger.warning("%s: %s", workspace.root, message)
+		result.verdict = "INSUFFICIENT_EVIDENCE"
+		result.reasoning = f"{message}\n{result.reasoning}"
+		result.evidence_gaps.append(message)
+
+
 async def run_challenges(
     client: CopilotClientProtocol,
     config: Config,
@@ -284,6 +331,7 @@ async def run_challenges(
     run_params: RunParams,
     progress_cb: ProgressCallback | None = None,
     alert_dir: Path | None = None,
+    evidence: GitHubEvidence | None = None,
 ) -> list[ChallengeResult]:
 	"""Challenge all analysis reports in parallel.
 
@@ -298,7 +346,8 @@ async def run_challenges(
 		results: Analysis results to challenge.
 		run_params: Run parameters for context.
 		progress_cb: Optional progress callback.
-		alert_dir: Alert output directory for stream logs.
+		alert_dir: Parent output directory for challenge workspaces.
+		evidence: Shared GitHub reads for this pipeline run.
 
 	Returns:
 		List of ChallengeResult aligned by index with the
@@ -319,6 +368,7 @@ async def run_challenges(
 			    idx,
 			    progress_cb,
 			    alert_dir=alert_dir,
+			    evidence=evidence,
 			)
 
 	tasks = [challenge_one(i) for i in range(len(results))]

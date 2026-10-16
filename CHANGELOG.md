@@ -1,31 +1,37 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+User-facing changes are listed here. See the source and commit history for
+implementation details.
 
 ## [Unreleased]
 
 ### Added
-- `Config.apply_overrides()` method for clean CLI→config mapping
-- `SummaryData` model separating data extraction from TUI rendering
-- Shared session utilities (`core/session.py`) deduplicating analysis/judge lifecycle
-- `resolve_asset_path()` for package-relative asset resolution
-- PEP 561 `py.typed` marker for downstream type checking
-- Debug logging with `exc_info=True` for all silenced exceptions
-- `@lru_cache` on `_import_registry()` for deterministic import caching
-- `PrivateAttr` for `ToolUsageStats._pending` (Pydantic v2 compliant)
+
+- Separate challenger evidence folders, so original analysis results and rerun
+  results can be reviewed independently.
+- Checks for changes to original evidence. A challenge cannot be confirmed if
+  those checks find changes or cannot verify the originals.
+- Warnings when optional analysis guides are unavailable.
 
 ### Changed
-- `RunOutcome` converted from `@dataclass` to Pydantic `BaseModel`
-- All typing imports modernized: `List`→`list`, `Dict`→`dict`, `Optional[X]`→`X | None`
-- `getattr()` overuse on typed models replaced with proper null checks
-- `run_analysis()` decomposed into `_setup_workspace`, `_build_session_config`, `_persist_diagnostics`
-- `print_summary()` split into `build_summary_data()` (pure) + `_render_summary()` (Rich)
-- Config defaults now use package-relative paths (work with pip install)
-- Deferred imports in `analysis.py` moved to module level
+
+- Challengers are instructed to question both the evidence and the conclusion.
+  Repeating the same result is no longer enough to confirm a report.
+- Required guidance is supplied automatically in workflow order. Optional guides
+  are loaded when relevant.
+- Agents share GitHub alert reads within a run to reduce duplicate requests.
+  Facts can be refreshed; live credential tests are not cached.
+- Updated the Copilot integration and default agent models. Each stage uses its
+  configured model and tools; the default judge reviews reports without tools.
 
 ### Fixed
-- Agent/template paths now resolve correctly when installed via pip
-- Stray `from typing import Iterable` mid-file in `usage.py` moved to top
-- Module docstring ordering in `agent_config.py` (before `__future__` import)
+
+- Alert tools now return full details and location pages instead of summaries.
+  Fixed a response-format error that prevented some alerts from being read.
+- Challenger reruns no longer execute in the original analysis workspace.
+- Fixed cases where challenger instructions were not applied and evidence paths
+  were not resolved correctly.
+- Improved support for installed packages and relative output directories.
+- Log messages no longer disrupt the live progress display.
+- Corrected guidance coverage, confidence labels, and duration reporting for
+  newer SDK versions. Early session events are now captured.

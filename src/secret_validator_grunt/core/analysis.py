@@ -27,6 +27,7 @@ from secret_validator_grunt.ui.streaming import (
     ProgressCallback,
 )
 from secret_validator_grunt.integrations.copilot_tools import get_session_tools
+from secret_validator_grunt.integrations.github_evidence import GitHubEvidence
 from secret_validator_grunt.utils.paths import ensure_within
 from secret_validator_grunt.loaders.prompts import load_prompt
 from secret_validator_grunt.utils.logging import get_logger
@@ -35,6 +36,7 @@ from secret_validator_grunt.core.skills import (
     discover_skill_directories,
     build_skill_manifest,
     format_manifest_for_context,
+    required_skill_names,
 )
 from secret_validator_grunt.core.session import (
     load_and_validate_template,
@@ -42,6 +44,7 @@ from secret_validator_grunt.core.session import (
     build_session_config,
     send_and_collect,
     destroy_session_safe,
+    verify_runtime_skills,
 )
 
 logger = get_logger(__name__)
@@ -165,6 +168,7 @@ async def run_analysis(
     run_params: RunParams,
     progress_cb: ProgressCallback | None = None,
     pre_cloned_repo: Path | None = None,
+    evidence: GitHubEvidence | None = None,
 ) -> AgentRunResult:
 	"""
 	Run a single analysis session.
@@ -177,6 +181,7 @@ async def run_analysis(
 		run_params: Validated run parameters.
 		progress_cb: Optional progress callback.
 		pre_cloned_repo: Path to pre-cloned repository.
+		evidence: Shared GitHub reads for this pipeline run.
 
 	Returns:
 		AgentRunResult with analysis output.
@@ -238,10 +243,14 @@ async def run_analysis(
 		skill_dirs = discover_skill_directories(
 		    config.analysis_skill_directories or [])
 		skill_manifest = build_skill_manifest(skill_dirs)
-		skill_manifest_context = format_manifest_for_context(skill_manifest)
 
 		# Discover hidden skills (underscore-prefixed) to disable at runtime
 		disabled_skills = discover_all_disabled_skills(config)
+
+		skill_manifest_context = format_manifest_for_context(
+		    skill_manifest,
+		    disabled=disabled_skills,
+		)
 
 		prompt = build_analysis_prompt(
 		    prompt_template,
@@ -252,7 +261,6 @@ async def run_analysis(
 		    skill_manifest_context=skill_manifest_context,
 		    repo_pre_cloned=repo_pre_cloned,
 		)
-		agent_prompt = f"@{agent.name}\n{prompt}"
 		collector = StreamCollector(
 		    run_id=run_id,
 		    stream_log_path=stream_log_path,
@@ -267,25 +275,28 @@ async def run_analysis(
 		    config,
 		    rp.org_repo,
 		    rp.alert_id,
+		    evidence,
 		)
 		session_config = build_session_config(
 		    model=agent.model or config.model,
 		    streaming=True,
 		    agent=agent,
 		    tools=session_tools,
-		    skill_directories=[
-		        str(workspace.resolve()),
-		        *skill_dirs,
-		    ],
+		    skill_directories=skill_dirs,
 		    disabled_skills=disabled_skills,
 		    session_id=(f"{rp.session_id_prefix}-{run_id}-{run_uuid}"),
+		    working_directory=str(workspace.resolve()),
+		    on_event=collector.handler,
 		)
-		session = await client.create_session(session_config)
-		session.on(collector.handler)
+		session = await client.create_session(**session_config)
+		await verify_runtime_skills(session, skill_manifest, disabled_skills,
+		                            collector, run_id, progress_cb)
+		collector.record_supplied_skills(
+		    required_skill_names(skill_manifest, disabled_skills))
 
 		raw = await send_and_collect(
 		    session,
-		    agent_prompt,
+		    prompt,
 		    config.analysis_timeout_seconds,
 		    collector,
 		    run_id,

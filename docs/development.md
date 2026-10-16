@@ -1,143 +1,102 @@
-# Development & Testing Guide
+# Development
 
-## Setup
+## Set up
+
+Use Python 3.11+, `uv`, Git, and access to GitHub Copilot.
 
 ```bash
-uv venv
 uv sync --extra dev
-cp .env.example .env   # Set GITHUB_TOKEN, COPILOT_TOKEN (optional), etc.
+cp .env.example .env
 ```
 
-## Running
+Configure authentication in `.env`. Never commit credentials or run output that
+contains secrets.
+
+## Configure and run
+
+| Setting | Purpose |
+| --- | --- |
+| `GITHUB_TOKEN` | Read secret scanning alerts and clone the repository |
+| `COPILOT_TOKEN` | Authenticate Copilot; falls back to `GITHUB_TOKEN` when unset |
+| `COPILOT_CLI_URL` | Connect to an existing CLI server, which manages its own authentication |
+| `COPILOT_MODEL` | Default model when an agent definition does not specify one |
+| `ANALYSIS_COUNT` | Number of independent analyses and corresponding challenges |
+| `MAX_PARALLEL_SESSIONS` | Limit concurrency within a stage |
+| `OUTPUT_DIR` | Choose where reports and workspaces are saved |
+
+See [.env.example](../.env.example) for common settings and
+[Config](../src/secret_validator_grunt/models/config.py) for current defaults,
+timeouts, and extension paths.
+
+Without `COPILOT_CLI_URL`, the SDK starts its bundled CLI runtime over stdio
+using the resolved Copilot token. External-server mode leaves Copilot
+authentication to that server; the application's GitHub reads still need
+`GITHUB_TOKEN`. See [copilot_client.py](../src/secret_validator_grunt/copilot_client.py).
+
+The startup banner shows `COPILOT_MODEL`, not necessarily each stage's effective
+model. Agent-definition overrides take precedence. Response timeouts apply to
+individual waits; analysis continuations can add another wait, so they are not
+a hard deadline for the whole pipeline.
+
+The challenger stage currently always runs. `CHALLENGE_ENABLED` is not a
+recognized setting in `Config`, even if present in an older example environment.
+
+Read [operational risks](operational-risks.md) before live testing. These commands
+can contact real provider systems:
 
 ```bash
-# Basic run (3 analyses + challenge + judge)
 uv run secret-validator-grunt org/repo alert_id
-
-# Custom analysis count with diagnostics
 uv run secret-validator-grunt org/repo alert_id --analyses 2 --show-usage
-
-# Override timeouts
-uv run secret-validator-grunt org/repo alert_id --timeout 900 --judge-timeout 120
-
-# Stream verbose (shows raw deltas)
-uv run secret-validator-grunt org/repo alert_id --stream-verbose
 ```
 
-## Testing
+The `run` subcommand is optional: `secret-validator-grunt run org/repo alert_id`
+and `secret-validator-grunt org/repo alert_id` invoke the same workflow.
+
+Use `uv run secret-validator-grunt --help` for command options. Use a separate
+output directory for each comparison run so results are easy to distinguish.
+
+## Make a change
+
+Follow the [project instructions](../.github/instructions/project.instructions.md)
+and [Python conventions](../.github/instructions/python.instructions.md).
+
+- Keep changes small and reuse the existing structure and helpers.
+- Use tabs, typed function signatures, absolute package imports, and Pydantic
+  data models.
+- Keep I/O off the async event loop.
+- Construct `Config` with its environment aliases, for example
+  `Config(SHOW_USAGE=True)`, not `Config(show_usage=True)`.
+- Use `tmp_path` for filesystem tests and simple dummy sessions for offline
+  tests. Mark async tests with `@pytest.mark.asyncio`.
+- When changing the report template or parser, update the paired Markdown and
+  JSON fixtures in `tests/fixtures/reports/`. Keep intentionally bad fixtures.
+
+For non-trivial features, agree on a design first, establish a test baseline,
+and implement in testable phases. Review the final changes for unnecessary
+complexity and missing failure cases.
+
+## Check your work
 
 ```bash
-# Run all tests
-uv run pytest
+# Focused tests while developing
+uv run --extra dev pytest tests/test_challenge.py -q
 
-# Run with verbose output
-uv run pytest tests/ -v
+# Full suite at phase checkpoints
+uv run --extra dev pytest tests/ -q
 
-# Run specific test file
-uv run pytest tests/test_skill_usage.py -v
+# Format and check formatting
+uv run fmt
+uv run fmt-check
 
-# Run specific test class/function
-uv run pytest tests/test_tool_usage.py::TestToolUsageStats::test_success_rate_mixed -v
+# For selected files, include the underlying formatter's mode explicitly
+uv run fmt --in-place src/secret_validator_grunt/main.py
+uv run fmt-check --diff src/secret_validator_grunt/main.py
 ```
 
-### Test Organization
+Passing explicit formatter arguments replaces the wrapper's defaults. Use the
+[code map](code-structure.md#where-common-changes-belong) to select companion
+tests instead of guessing which module exercises a behavior.
 
-Tests mirror the source structure. Each source module has a corresponding test file:
-
-| Test File | Coverage |
-|-----------|----------|
-| `test_config.py` | Config model, env loading, validation, field defaults |
-| `test_cli.py` | CLI entry point, argument parsing |
-| `test_analysis_prompt.py` | Analysis prompt building, context injection |
-| `test_challenge.py` | Challenge prompt building, result parsing, run_single_challenge |
-| `test_session.py` | Shared session utilities: send_and_collect, continuation, destroy |
-| `test_pre_clone.py` | Pre-clone repository strategy, copytree, fallback behavior |
-| `test_skill_usage.py` | SkillUsageStats, compliance score, phase tracking |
-| `test_tool_usage.py` | ToolUsageStats, add_start/complete, success rates |
-| `test_streaming_progress.py` | StreamCollector event handling, skill/tool tracking integration |
-| `test_ui.py` | TUI rendering, table structure (3 tables), show_usage gating |
-| `test_tools.py` | Custom Copilot tools (GitHub API, validate_secret) |
-| `test_skills.py` | Per-agent skill discovery, manifest building, hidden skill detection |
-| `test_runner.py` | Orchestration integration (run_all) |
-| `test_summary.py` | Summary model, build_summary_data, challenger usage tracking |
-| `test_judge_prompt.py` | Judge prompt formatting, skill usage summaries, challenge annotations |
-| `test_judge_error_fallback.py` | Judge error handling and fallback behavior |
-| `test_report_parser.py` | Report.from_markdown parsing |
-| `test_report_parsing_tables.py` | Report table extraction edge cases |
-| `test_agent_loader.py` | Agent definition loading from markdown frontmatter |
-| `test_agent_loader_template.py` | Agent template loading |
-| `test_templates_loader.py` | Report template loading |
-| `test_run_params.py` | RunParams validation, slugification |
-| `test_paths.py` | Path traversal guards |
-| `test_copilot_client.py` | Client factory modes |
-| `test_custom_agents.py` | AgentConfig → CustomAgentConfig conversion |
-| `test_parsing.py` | JSON extraction from fenced blocks |
-| `test_timeouts.py` | Analysis, judge and challenger timeout behavior |
-| `test_reporting.py` | Report rendering and file persistence |
-| `test_evals.py` | Eval checks, models, fixtures, orchestrator |
-| `test_logging.py` | TokenSanitizingFilter, sanitize_text, configure_logging |
-
-### Test Patterns
-
-- **Async tests**: Use `@pytest.mark.asyncio` with `pytest-asyncio` in strict mode
-- **Dummy objects**: Tests create inline dummy classes for `DummySession`, `DummyClient`, etc. — no shared fixtures for session mocks
-- **Config construction**: Use `Config(SHOW_USAGE=True)` (the alias), not `Config(show_usage=True)` — pydantic-settings requires the alias for constructor kwargs
-- **tmp_path**: Pytest's built-in `tmp_path` fixture for workspace isolation
-- **No external calls**: All tests are offline; Copilot SDK sessions and GitHub API calls are mocked
-
-### Test Conventions
-
-- Tab indentation (matching project style)
-- Test classes grouped by functionality (`TestToolCallEvent`, `TestToolUsageStats`, etc.)
-- Descriptive docstrings on each test method explaining what is being verified
-- Type hints on test methods (`def test_foo(self) -> None`)
-
-## Formatting
-
-```bash
-uv run fmt          # Format code with yapf
-uv run fmt-check    # Check formatting without modifying
-```
-
-The project uses tabs for indentation, consistent with `python.instructions.md`.
-
-## Key Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `COPILOT_CLI_URL` | None | External Copilot CLI server URL (omit for native stdio) |
-| `COPILOT_MODEL` | Claude Sonnet 4.5 | Default model for sessions |
-| `GITHUB_TOKEN` | None | GitHub PAT for secret scanning API |
-| `ANALYSIS_COUNT` | 3 | Number of concurrent analyses |
-| `ANALYSIS_TIMEOUT_SECONDS` | 1800 | Per-analysis timeout (seconds) |
-| `JUDGE_TIMEOUT_SECONDS` | 300 | Judge session timeout (seconds) |
-| `CHALLENGER_TIMEOUT_SECONDS` | 300 | Per-challenge timeout (seconds) |
-| `CHALLENGER_AGENT_FILE` | (built-in path) | Path to challenger agent definition |
-| `CHALLENGER_SKILL_DIRECTORIES` | [] | Additional challenger skill root directories |
-| `MAX_CONTINUATION_ATTEMPTS` | 2 | Max continuation prompts per session |
-| `MIN_RESPONSE_LENGTH` | 500 | Minimum response length before triggering continuation |
-| `SHOW_USAGE` | False | Enable diagnostics tables and diagnostics.json |
-| `STREAM_VERBOSE` | False | Stream raw deltas to console |
-| `OUTPUT_DIR` | analysis | Base output directory |
-| `LOG_LEVEL` | info | Log level for application |
-| `AGENT_FILE` | (built-in path) | Path to analysis agent definition |
-| `JUDGE_AGENT_FILE` | (built-in path) | Path to judge agent definition |
-| `REPORT_TEMPLATE_FILE` | (built-in path) | Path to report template |
-| `POLL_INTERVAL_SECONDS` | 5 | Polling interval (seconds) |
-| `MAX_PARALLEL_SESSIONS` | None (=analysis_count) | Maximum parallel sessions |
-| `VALIDATE_SECRET_TIMEOUT_SECONDS` | 30 | Timeout for secret validators |
-| `SKILL_DIRECTORIES` | [] | Additional analysis skill root directories |
-| `DISABLED_SKILLS` | [] | Skills to disable at runtime |
-
-## Dependencies
-
-| Package | Purpose |
-|---------|---------|
-| `github-copilot-sdk` | Copilot SDK for agent sessions (JSON-RPC to Copilot CLI) |
-| `pydantic` + `pydantic-settings` | Data models and env-based configuration |
-| `typer` | CLI framework |
-| `rich` | Terminal UI (Live display, tables) |
-| `ghapi` | GitHub REST API client |
-| `validate-secrets` | Deterministic secret validators (from `advanced-security`) |
-| `pyyaml` | YAML frontmatter parsing |
-| `python-dotenv` | `.env` file loading |
+Unit tests should not depend on live credentials or provider access. Keep
+authorized live checks separate, and review their actual evidence rather than
+only the final verdict.

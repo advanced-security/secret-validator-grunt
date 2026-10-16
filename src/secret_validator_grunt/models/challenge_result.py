@@ -64,6 +64,11 @@ class ChallengeResult(BaseModel):
 	                 "report's conclusion. Empty if verdict is "
 	                 "CONFIRMED."),
 	)
+	workspace: str | None = Field(
+	    default=None,
+	    description=
+	    "Host-created directory containing this challenge's evidence",
+	)
 
 	# Usage tracking fields (populated when --show-usage is active)
 	usage: UsageStats | None = Field(

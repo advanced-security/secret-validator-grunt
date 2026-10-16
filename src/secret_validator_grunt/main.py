@@ -4,6 +4,7 @@ import asyncio
 import sys
 
 import typer
+from rich.console import Console
 from typer.main import get_command
 
 from secret_validator_grunt.models.config import Config, load_env
@@ -51,7 +52,8 @@ def run_impl(
 		show_usage: Whether to show token/cost metrics.
 	"""
 	load_env()
-	configure_logging()
+	console = Console()
+	configure_logging(console=console)
 	params = RunParams(
 	    org_repo=org_repo,
 	    alert_id=alert_id,
@@ -75,6 +77,7 @@ def run_impl(
 	    show_usage=config.show_usage,
 	    org_repo=params.org_repo,
 	    alert_id=params.alert_id,
+	    console=console,
 	) as ui:
 
 		def progress_cb(run_id: str, msg: str) -> None:

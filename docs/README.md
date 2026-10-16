@@ -1,17 +1,20 @@
 # Documentation
 
-The documents in this folder are AI-generated and maintained as reference material. Their primary purpose is to onboard AI coding agents and support efficient development of new features.
+Start with the [project README](../README.md) for setup and usage. Read
+[operational risks](operational-risks.md) before testing real credentials.
 
-## Contents
+For engineers and coding agents, read the architecture, code map, and development
+guide before making changes.
 
-| Document | Purpose |
-|----------|---------|
-| [architecture.md](architecture.md) | Design philosophy, data flow, and key decisions |
-| [code-structure.md](code-structure.md) | Module-by-module breakdown of `src/` |
-| [development.md](development.md) | Setup, running, testing, and environment variables |
-| [diagnostics.md](diagnostics.md) | Usage, skill, and tool tracking (`--show-usage`) |
-| [skills-and-agents.md](skills-and-agents.md) | Skills system, agent definitions, custom tools, prompts |
+| Guide | Use it to |
+| --- | --- |
+| [Architecture](architecture.md) | Understand the workflow and its limits |
+| [Code map](code-structure.md) | Find where a change belongs |
+| [Development](development.md) | Configure, test, and contribute |
+| [Skills and agents](skills-and-agents.md) | Change agent guidance or add a skill |
+| [Diagnostics](diagnostics.md) | Find results and investigate a run |
+| [Operational risks](operational-risks.md) | Plan authorized testing and protect systems and data |
 
-## Maintenance
-
-These docs should be kept in sync with the source code. When making significant changes to `src/`, update the relevant documentation here and in `.github/instructions/project.instructions.md`.
+Keep these guides focused on workflows, responsibilities, and user-visible
+behavior. Link to source files for current defaults, schemas, and implementation
+details instead of copying them here.

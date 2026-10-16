@@ -114,6 +114,12 @@ def build_summary_data(
 			data.workspaces.append(
 			    WorkspaceEntry(run_id=str(res.run_id),
 			                   workspace=res.workspace))
+		if res.challenge_result and res.challenge_result.workspace:
+			data.workspaces.append(
+			    WorkspaceEntry(
+			        run_id=f"challenge-{res.run_id}",
+			        workspace=res.challenge_result.workspace,
+			    ))
 	if judge_result and getattr(judge_result, "workspace", None):
 		data.workspaces.append(
 		    WorkspaceEntry(run_id="judge", workspace=judge_result.workspace))

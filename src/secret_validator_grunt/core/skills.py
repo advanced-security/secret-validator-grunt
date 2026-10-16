@@ -28,6 +28,9 @@ DEFAULT_SKILLS_DIRECTORY = SKILLS_BASE / "analysis"
 # Challenger skills directory (flat layout, no phases)
 CHALLENGER_SKILLS_DIRECTORY = SKILLS_BASE / "challenger"
 
+# Judge skills directory (flat layout, currently empty)
+JUDGE_SKILLS_DIRECTORY = SKILLS_BASE / "judge"
+
 # Valid agent types for skill discovery
 VALID_AGENT_TYPES = frozenset({"analysis", "challenger", "judge"})
 
@@ -171,16 +174,16 @@ def discover_skills(skills_dir: Path) -> list[SkillInfo]:
 	for skill_file in skills_dir.rglob("SKILL.md"):
 		# Skip skills in underscore-prefixed directories (templates)
 		if any(
-		    part.startswith("_")
+		    part.startswith(("_", "."))
 		    for part in skill_file.relative_to(skills_dir).parts):
 			continue
 
 		try:
 			content = skill_file.read_text(encoding="utf-8")
-			meta, _ = split_frontmatter(content)
+			meta, body = split_frontmatter(content, strict=True)
 
-			name = meta.get("name", skill_file.parent.name)
-			description = meta.get("description", "")
+			name = meta["name"]
+			description = meta["description"]
 			phase = (meta.get("phase")
 			         or _infer_phase_from_path(skill_file, skills_dir))
 			secret_type = (meta.get("secret-type") or meta.get("secret_type"))
@@ -194,12 +197,12 @@ def discover_skills(skills_dir: Path) -> list[SkillInfo]:
 			        path=str(skill_file),
 			        phase=phase,
 			        secret_type=secret_type,
-			        required=bool(required),
+			        required=required,
+			        content=body.strip(),
 			        agent=agent,
 			    ))
 		except Exception as exc:
-			logger.debug("Failed to parse skill %s: %s", skill_file, exc)
-			continue
+			raise ValueError(f"Invalid skill {skill_file}: {exc}") from exc
 
 	# Sort by phase (if present) then by name
 	skills.sort(key=lambda s: (s.phase or "z", s.name))
@@ -222,9 +225,17 @@ def build_skill_manifest(
 	else:
 		skills_dirs = [Path(d) for d in skills_dirs]
 
-	all_skills: list[SkillInfo] = []
+	by_name: dict[str, SkillInfo] = {}
 	for skills_dir in skills_dirs:
-		all_skills.extend(discover_skills(skills_dir))
+		for skill in discover_skills(skills_dir):
+			previous = by_name.get(skill.name)
+			if previous is not None and previous.path != skill.path:
+				raise ValueError(
+				    f"Duplicate skill {skill.name}: {previous.path}, {skill.path}"
+				)
+			by_name[skill.name] = skill
+	all_skills = sorted(by_name.values(), key=lambda s:
+	                    (s.phase or "z", s.name))
 
 	# Extract unique phases
 	phases = sorted(set(s.phase for s in all_skills if s.phase))
@@ -289,63 +300,87 @@ def discover_hidden_skills(skills_dir: Path) -> list[str]:
 	return hidden
 
 
-def format_manifest_for_context(manifest: SkillManifest) -> str:
+def required_skill_names(
+    manifest: SkillManifest,
+    disabled: list[str] | None = None,
+) -> list[str]:
+	"""
+	Return names of required, enabled skills in manifest order.
+
+	Parameters:
+		manifest: The skill manifest.
+		disabled: Skill names disabled for the session.
+
+	Returns:
+		Deduplicated list of required skill names supplied in the prompt.
+	"""
+	excluded = set(disabled or [])
+	names: list[str] = []
+	for skill in manifest.skills:
+		if (skill.required and skill.name not in excluded
+		    and skill.name not in names):
+			names.append(skill.name)
+	return names
+
+
+def format_manifest_for_context(
+    manifest: SkillManifest,
+    disabled: list[str] | None = None,
+) -> str:
 	"""
 	Format the manifest as markdown for inclusion in agent context.
 
 	Parameters:
 		manifest: The skill manifest to format.
+		disabled: Skills excluded from both guidance and on-demand listings.
 
 	Returns:
 		Markdown string describing available skills.
 	"""
+	excluded = set(disabled or [])
+	skills = [s for s in manifest.skills if s.name not in excluded]
 	lines = [
 	    "# Available Skills",
 	    "",
-	    "Use the `skill` tool to load guidance as needed. Skills marked "
-	    "**⚠️ REQUIRED** must be loaded before proceeding with that phase.",
+	    "Follow the phases below in order. At each phase, apply ALL "
+	    "**⚠️ REQUIRED** guidance supplied below before proceeding. "
+	    "Its full content is already in this prompt; do not reload it.",
+	    "",
+	    "Review the optional skills in each phase. Use `skill(...)` to load "
+	    "a guide when its secret type, context, or testing method applies. "
+	    "Optional means conditional, not forbidden: use relevant guides "
+	    "before the work they inform. Do not load unrelated guides.",
 	    "",
 	]
-
-	# Add phase-organized skills
-	if manifest.phases:
-		for phase in manifest.phases:
-			phase_skills = [s for s in manifest.skills if s.phase == phase]
-			if phase_skills:
-				header = _format_phase_header(phase)
-				lines.append(f"## {header}")
-				lines.append("")
-				for skill in phase_skills:
-					req_marker = " **⚠️ REQUIRED**" if skill.required else ""
-					lines.append(
-					    f"- `skill(\"{skill.name}\")`: {skill.description}{req_marker}"
-					)
-				lines.append("")
-
-	# Add skills without phase
-	phaseless = [s for s in manifest.skills if not s.phase]
-	if phaseless:
-		lines.append("## Other Skills")
-		lines.append("")
-		for skill in phaseless:
-			req_marker = " **⚠️ REQUIRED**" if skill.required else ""
-			lines.append(
-			    f"- `skill(\"{skill.name}\")`: {skill.description}{req_marker}"
-			)
-		lines.append("")
-
-	# Add secret-type specific skills summary
-	secret_type_skills = [
-	    s for s in manifest.skills
-	    if s.secret_type and s.secret_type != "_template"
-	]
-	if secret_type_skills:
-		lines.append("## Secret Type Specific Guides")
-		lines.append("")
-		for skill in secret_type_skills:
-			lines.append(
-			    f"- **{skill.secret_type}** → `skill(\"{skill.name}\")`")
-		lines.append("")
+	phases = sorted({s.phase for s in skills if s.phase})
+	for phase in [*phases, None]:
+		phase_skills = [s for s in skills if s.phase == phase]
+		if not phase_skills:
+			continue
+		header = _format_phase_header(phase) if phase else "Other Skills"
+		lines.extend([f"## {header}", ""])
+		for skill in phase_skills:
+			if not skill.required:
+				continue
+			if not skill.content:
+				raise ValueError(
+				    f"Required skill {skill.name} has no content: {skill.path}"
+				)
+			lines.extend([
+			    f"### {skill.name} **⚠️ REQUIRED** (supplied in prompt)",
+			    "",
+			    skill.content,
+			    "",
+			])
+		optional = [s for s in phase_skills if not s.required]
+		if optional:
+			lines.extend(["### Optional guides (load when relevant)", ""])
+			for skill in optional:
+				match = (f" [secret type: {skill.secret_type}]"
+				         if skill.secret_type else "")
+				lines.append(
+				    f'- `skill("{skill.name}")`: {skill.description}{match}')
+			lines.append("")
 
 	return "\n".join(lines)
 
@@ -371,6 +406,7 @@ __all__ = [
     "SKILLS_BASE",
     "DEFAULT_SKILLS_DIRECTORY",
     "CHALLENGER_SKILLS_DIRECTORY",
+    "JUDGE_SKILLS_DIRECTORY",
     "VALID_AGENT_TYPES",
     "discover_skill_directories",
     "discover_skill_directories_for_agent",
@@ -378,5 +414,6 @@ __all__ = [
     "discover_skills",
     "discover_hidden_skills",
     "build_skill_manifest",
+    "required_skill_names",
     "format_manifest_for_context",
 ]

@@ -29,7 +29,16 @@ Your dedicated workspace is: `{{workspace_path}}`
 
 ## Skill Loading Requirements
 
-You MUST invoke the `skill` tool to load guidance from ALL available skills, following the phase order. Load ALL skills in each phase before proceeding to the next phase. Do not skip any initialization phase skills.
+Follow the phase-organized methodology below in order: initialization,
+context gathering, verification, then scoring and reporting. Apply every
+REQUIRED skill in its phase before proceeding; its full guidance is supplied
+in this prompt, so do not load it again.
+
+At each phase, review the optional guides listed in the manifest. Invoke
+`skill(...)` when the guide matches the secret type, repository context, or
+verification approach you choose. Load relevant guides before performing
+that work, and revisit them if new evidence changes your approach.
+Do not load unrelated optional skills merely to increase a loading score.
 
 ## Reminders
 
