@@ -14,8 +14,8 @@ This skill guides the use of the `validate_secret` and `list_secret_validators` 
 
 During **Phase 3 — Verification**, after you have gathered the secret value and identified its `secret_type` from the alert metadata:
 
-1. Call `list_secret_validators` to see which validators are available.
-2. If the alert's `secret_type` matches an available validator, call `validate_secret` with the secret value and type.
+1. Call `validate_secret` directly with the fetched secret value and its `secret_type`; it selects the matching validator.
+2. If it returns `no_validator`, use relevant optional guides and manual verification. Call `list_secret_validators` only when you need to investigate alternative supported types; do not fetch the entire catalog routinely.
 3. Incorporate the deterministic result into your analysis alongside other verification evidence.
 
 ## Tool: `list_secret_validators`
@@ -69,4 +69,5 @@ Validates a secret value against its registered validator.
 - Deterministic validation is **supplementary** — it does not replace the full analysis methodology.
 - Most secret types will return `no_validator`. This is normal.
 - Never skip other verification steps just because a validator exists.
+- Validation calls are live and uncached, even when alert metadata came from a shared snapshot.
 - The validator set may grow over time as the open-source `validate-secrets` project adds support for more secret types.

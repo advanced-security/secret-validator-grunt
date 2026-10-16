@@ -38,6 +38,13 @@ You MUST factor these eval check results into your scoring:
 - A report with 100% eval score and all checks passed demonstrates full template compliance and should be scored higher for completeness.
 - Never select a report that fails error-severity eval checks over one that passes them, unless the passing report has been REFUTED by the challenger and the failing report has been CONFIRMED.
 
+## Methodology Guidance
+
+Skill coverage records which required bodies were supplied in the prompt and
+which optional guides were loaded. It is not evidence that a phase was executed.
+Assess initialization, context gathering, verification, and scoring from the
+report and challenger evidence; do not reward loading unrelated optional skills.
+
 ## Output
 
 Return **valid JSON** (no additional prose):

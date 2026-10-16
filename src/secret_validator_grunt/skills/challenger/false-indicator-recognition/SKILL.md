@@ -1,6 +1,6 @@
 ---
 name: false-indicator-recognition
-description: Patterns that look like real secrets but aren't: test keys, placeholders, environment-specific tokens.
+description: "Patterns that look like real secrets but aren't: test keys, placeholders, environment-specific tokens."
 agent: challenger
 required: false
 ---

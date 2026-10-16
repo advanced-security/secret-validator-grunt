@@ -1,7 +1,5 @@
 """Tests for skill usage tracking models."""
 
-import pytest
-
 from secret_validator_grunt.models.skill_usage import (
     SkillLoadEvent,
     SkillLoadStatus,
@@ -111,6 +109,17 @@ class TestSkillUsageStats:
 		    loaded_skills=["a"],
 		)
 		assert stats.compliance_score == 100.0
+
+	def test_supplied_then_loaded_skill_counts_once_per_phase(self) -> None:
+		"""Reloading supplied guidance must not inflate phase coverage."""
+		stats = SkillUsageStats()
+		stats.add_load_event("a", SkillLoadStatus.LOADED,
+		                     phase="1-initialization", supplied=True)
+		stats.add_load_event("a", SkillLoadStatus.LOADED,
+		                     phase="1-initialization")
+		assert stats.loaded_by_phase() == {"1-initialization": ["a"]}
+		assert stats.supplied_skills == ["a"]
+		assert len(stats.load_events) == 2
 
 	def test_compliance_score_with_all_required_loaded(self) -> None:
 		"""Compliance score is 100% when all required skills are loaded."""

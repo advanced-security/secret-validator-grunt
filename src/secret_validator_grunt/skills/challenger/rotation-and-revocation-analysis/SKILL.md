@@ -32,16 +32,17 @@ Compare the alert state against the report's claims.
 
 ## Check 2: Repository History
 
-Look for rotation evidence in the repository:
+When rotation affects the conclusion, inspect relevant history in the
+challenger's repository copy:
 
 ```bash
 # Search for rotation commits
-git log --oneline --all --grep="rotate" {{workspace_path}}/repo/
-git log --oneline --all --grep="revoke" {{workspace_path}}/repo/
-git log --oneline --all --grep="invalidate" {{workspace_path}}/repo/
+git -C "{{challenge_workspace_path}}/repo" log --oneline --all --grep="rotate"
+git -C "{{challenge_workspace_path}}/repo" log --oneline --all --grep="revoke"
+git -C "{{challenge_workspace_path}}/repo" log --oneline --all --grep="invalidate"
 
 # Check if the secret-containing file was modified recently
-git log -p --follow -- path/to/secret/file {{workspace_path}}/repo/
+git -C "{{challenge_workspace_path}}/repo" log -p --follow -- path/to/secret/file
 ```
 
 Key signals:
@@ -74,15 +75,16 @@ If the analysis didn't check expiration, this is an evidence gap.
 
 ## Check 5: Multiple Values
 
-Did the analysis test the CURRENT secret or a historical one?
+Did the analysis test the exact alerted value?
 
 - Alert locations may span multiple commits
-- The secret value may differ between locations
-- The "live" secret might be in the most recent commit only
+- The current file may contain a replacement instead of the alerted value
+- A working replacement does not establish the alerted value's validity
+- Removal or replacement in Git does not prove provider-side revocation
 
 ```bash
 # Find all versions of the secret
-git log -p --all -S 'secret_pattern' {{workspace_path}}/repo/
+git -C "{{challenge_workspace_path}}/repo" log -p --all -S 'secret_pattern'
 ```
 
 ## Challenge Questions
@@ -90,7 +92,7 @@ git log -p --all -S 'secret_pattern' {{workspace_path}}/repo/
 When reviewing a report, ask:
 
 1. Did the analysis check current alert state, or assume it's active?
-2. Did the analysis check repository history for rotation evidence?
+2. If rotation affects the conclusion, did the analysis check relevant history?
 3. Did the analysis distinguish between "invalid credential" and
    "network unreachable"?
 4. Did the analysis check for expiration if applicable?
@@ -103,10 +105,11 @@ If the answer to any is "no," document it as an evidence gap.
 Refute a TRUE_POSITIVE if:
 - Alert state shows `resolution: "revoked"` AND testing confirms
   the secret no longer works
-- Repository history shows clear rotation AND new credentials exist
+- Direct testing contradicts the claim that the exact alerted value works;
+  replacement credentials in Git alone are not sufficient
 - Secret is demonstrably expired (JWT `exp` in past, cert expired)
 
 Refute a FALSE_POSITIVE if:
-- Secret was rotated but report based conclusion on old version
+- Direct testing shows the exact alerted value still works
 - Secret appears test-like but actually works against production
 - New credential was created with same value after rotation

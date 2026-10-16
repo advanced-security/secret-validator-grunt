@@ -53,7 +53,8 @@ def test_format_skill_usage_summary_with_full_data():
 	)
 	summary = _format_skill_usage_summary(result)
 
-	assert "### Methodology Compliance" in summary
+	assert "### Methodology Guidance" in summary
+	assert "NOT proof" in summary
 	assert "2/3" in summary  # Skills loaded
 	assert "1/2" in summary  # Required loaded
 	assert "50%" in summary  # Compliance score
@@ -330,3 +331,20 @@ def test_format_reports_eval_and_challenge_together():
 	eval_pos = blob.index("--- EVAL CHECK RESULT ---")
 	challenge_pos = blob.index("--- ADVERSARIAL CHALLENGE RESULT ---")
 	assert eval_pos < challenge_pos
+
+
+def test_format_skill_usage_summary_supplied_and_unavailable():
+	"""Judge sees supplied guidance separately from runtime gaps."""
+	skill_usage = SkillUsageStats(
+	    available_skills=["a", "b"],
+	    required_skills=["a", "b"],
+	    loaded_skills=["a"],
+	    supplied_skills=["a"],
+	    unavailable_skills=["b"],
+	)
+	result = AgentRunResult(run_id="0", raw_markdown="# R", progress_log=[],
+	                        skill_usage=skill_usage)
+	summary = _format_skill_usage_summary(result)
+	assert "Supplied in Task Prompt:** a" in summary
+	assert "Unavailable at Runtime" in summary
+	assert "not analyst fault):** b" in summary

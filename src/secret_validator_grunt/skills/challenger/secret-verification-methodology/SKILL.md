@@ -29,6 +29,12 @@ workspace/
 └── report.md         # The analysis report
 ```
 
+The original workspace is read-only evidence. Your separate working copy is
+`{{challenge_workspace_path}}`; it starts with copies of these inputs, except
+virtual environments and caches. Only run scripts from the working copy.
+Never write to or unlock originals. Distinguish copied inputs from actual
+challenger-produced evidence.
+
 ## Inspection Protocol
 
 ### 1. List Workspace Contents
@@ -59,6 +65,8 @@ Look for:
 - What authentication method is used
 - What success/failure criteria are defined
 - Whether the actual secret value is used correctly
+- Whether companion credentials, scope, and region are correct
+- Whether alternative explanations could produce the same response
 
 ### 3. Read Test Output Logs
 
@@ -75,22 +83,33 @@ Compare the log content against what the report claims. Key questions:
 
 ### 4. Re-execute Verification
 
-If scripts exist and appear safe to run:
+If a safe rerun resolves a concrete question:
 
 ```bash
-cd {{workspace_path}}/scripts
-source venv/bin/activate  # if venv exists
-python verify_secret.py
+cd "{{challenge_workspace_path}}"
+set -o pipefail
+python3 scripts/verify_secret.py 2>&1 | tee logs/challenger-verify-1.log
 ```
 
-Compare the new results against the report's claims.
+Choose an interpreter with the required dependencies. You may use an existing
+analyst environment's interpreter read-only, or create an environment in your
+working copy. Do not install into an analyst environment.
+
+Inspect output paths first. Scripts with original absolute paths must be
+adapted only in the copy, with changes explained, or left unexecuted with a
+clear limitation. Preserve each attempt's stdout/stderr under a distinct log
+name; do not claim copied logs as your own execution.
+
+Compare the new results against the report's claims. Reproducibility alone
+does not establish that the method or inference is correct. Prefer the
+smallest relevant check over repeating every test.
 
 ### 5. Cross-check Repository Evidence
 
 If the report cites specific code:
 
 ```bash
-grep -r "pattern" {{workspace_path}}/repo/
+grep -r "pattern" "{{challenge_workspace_path}}/repo/"
 ```
 
 Verify the cited code exists and says what the report claims.
@@ -106,6 +125,12 @@ Rate the analysis based on:
 | Secret tested | Actually hit external API | Only checked syntax |
 | Error handling | Distinguishes auth fail vs network | Generic errors |
 | Output matches | Logs match report claims | Discrepancies |
+| Inference | Appropriate endpoint and provider-specific interpretation | Generic status code treated as proof |
+
+CONFIRMED requires genuine evidence and a supported conclusion without
+unresolved material gaps. A reproducible test against an inappropriate or
+scope-restricted endpoint can still warrant INSUFFICIENT_EVIDENCE. Use
+REFUTED for demonstrated contradictions, not mere uncertainty.
 
 ## Common Problems to Detect
 
@@ -117,3 +142,6 @@ Rate the analysis based on:
 4. **Stale results** — Logs are from a previous run; report describes
    different outcomes
 5. **Interpretation errors** — 401 logged but report says "access granted"
+6. **Unsupported inference** — Generic 403 treated as valid credentials,
+   a public 200 treated as authentication, or restricted endpoint rejection
+   treated as proof that the credential cannot work anywhere

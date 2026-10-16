@@ -10,6 +10,7 @@ avoid duplicated event handling logic.
 from __future__ import annotations
 
 import time
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, Callable
 
@@ -26,6 +27,16 @@ from secret_validator_grunt.models.tool_usage import ToolUsageStats
 ProgressCallback = Callable[[str, str], None]
 
 logger = get_logger(__name__)
+
+
+def _duration_seconds(value: Any) -> float:
+	"""Normalize an SDK usage duration to seconds.
+
+	Newer SDKs report ``timedelta``; older ones reported milliseconds.
+	"""
+	if isinstance(value, timedelta):
+		return value.total_seconds()
+	return (value or 0) / 1000.0
 
 
 class StreamCollector:
@@ -85,12 +96,13 @@ class StreamCollector:
 			return SkillUsageStats(disabled_skills=list(
 			    self._disabled_skills), )
 
-		available = [s.name for s in self._skill_manifest.skills]
-		required = [s.name for s in self._skill_manifest.skills if s.required]
-		phase_map = {
-		    s.name: s.phase
-		    for s in self._skill_manifest.skills if s.phase
-		}
+		enabled = [
+		    s for s in self._skill_manifest.skills
+		    if s.name not in self._disabled_skills
+		]
+		available = [s.name for s in enabled]
+		required = [s.name for s in enabled if s.required]
+		phase_map = {s.name: s.phase for s in enabled if s.phase}
 		return SkillUsageStats(
 		    available_skills=available,
 		    required_skills=required,
@@ -119,6 +131,25 @@ class StreamCollector:
 	def tool_usage(self) -> ToolUsageStats | None:
 		"""Return the tool usage statistics, or None if not tracking."""
 		return self._tool_usage
+
+	def _manifest_info(self, skill_name: str) -> tuple[str | None, bool]:
+		"""Return (phase, is_required) for a skill from the manifest."""
+		if self._skill_manifest:
+			for skill_info in self._skill_manifest.skills:
+				if skill_info.name == skill_name:
+					return skill_info.phase, skill_info.required
+		return None, False
+
+	def record_supplied_skills(self, names: list[str]) -> None:
+		"""Record required bodies included in the prompt, not proof of use."""
+		for name in names:
+			if name in self._skill_usage.supplied_skills:
+				continue
+			phase, is_required = self._manifest_info(name)
+			self._skill_usage.add_load_event(name, SkillLoadStatus.LOADED,
+			                                 phase=phase,
+			                                 is_required=is_required,
+			                                 supplied=True)
 
 	def _handle_skill_event(self, event_type: SessionEventType,
 	                        data: Any) -> None:
@@ -170,17 +201,11 @@ class StreamCollector:
 
 			# Determine status from result
 			success = getattr(data, "success", True)
-			error_msg = getattr(data, "error", None)
+			error = getattr(data, "error", None)
+			error_msg = getattr(error, "message", error)
 
 			# Look up skill info from manifest
-			phase = None
-			is_required = False
-			if self._skill_manifest:
-				for skill_info in self._skill_manifest.skills:
-					if skill_info.name == skill_name:
-						phase = skill_info.phase
-						is_required = skill_info.required
-						break
+			phase, is_required = self._manifest_info(skill_name)
 
 			# Determine status
 			if skill_name in self._disabled_skills:
@@ -245,8 +270,7 @@ class StreamCollector:
 			    cache_read_tokens=getattr(data, "cache_read_tokens", 0) or 0,
 			    cache_write_tokens=getattr(data, "cache_write_tokens", 0) or 0,
 			    cost=getattr(data, "cost", 0) or 0,
-			    # SDK reports duration in milliseconds, convert to seconds
-			    duration=(getattr(data, "duration", 0) or 0) / 1000.0,
+			    duration=_duration_seconds(getattr(data, "duration", None)),
 			)
 		elif et == SessionEventType.SESSION_USAGE_INFO:
 			self.usage.update_snapshot(
@@ -261,8 +285,7 @@ class StreamCollector:
 			    cache_read_tokens=getattr(data, "cache_read_tokens", 0) or 0,
 			    cache_write_tokens=getattr(data, "cache_write_tokens", 0) or 0,
 			    cost=getattr(data, "cost", 0) or 0,
-			    # SDK reports duration in milliseconds, convert to seconds
-			    duration=(getattr(data, "duration", 0) or 0) / 1000.0,
+			    duration=_duration_seconds(getattr(data, "duration", None)),
 			)
 		elif et in (
 		    SessionEventType.TOOL_EXECUTION_START,
@@ -311,7 +334,7 @@ class StreamCollector:
 
 async def fetch_last_assistant_message(session: Any) -> str | None:
 	"""
-	Fallback to retrieve the last assistant message from session messages.
+	Fallback to retrieve the last assistant message from session events.
 
 	Parameters:
 		session: The Copilot session object.
@@ -320,8 +343,8 @@ async def fetch_last_assistant_message(session: Any) -> str | None:
 		Content of the last assistant message, or None.
 	"""
 	try:
-		messages = await session.get_messages()
-		for ev in reversed(messages):
+		events = await session.get_events()
+		for ev in reversed(events):
 			if getattr(ev, "type", None) == SessionEventType.ASSISTANT_MESSAGE:
 				return getattr(getattr(ev, "data", None), "content", None)
 	except Exception:

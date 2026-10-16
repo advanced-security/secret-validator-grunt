@@ -324,11 +324,18 @@ class TUI:
 		else:
 			compliance_style = "red"
 
+		loaded_str = f"{loaded_count}/{available_count}"
+		if su.unavailable_skills:
+			loaded_str += f" ⚠ {len(su.unavailable_skills)} unavailable"
+		required_str = f"{loaded_required}/{required_count}"
+		if su.supplied_skills:
+			required_str += f" ({len(su.supplied_skills)} supplied)"
+
 		table.add_row(
 		    label,
-		    f"{loaded_count}/{available_count}",
+		    loaded_str,
 		    phase_str,
-		    f"{loaded_required}/{required_count}",
+		    required_str,
 		    Text(f"{compliance:.0f}%", style=compliance_style),
 		)
 
@@ -349,7 +356,7 @@ class TUI:
 		table.add_column("Skills Loaded")
 		table.add_column("By Phase")
 		table.add_column("Required")
-		table.add_column("Compliance")
+		table.add_column("Guidance Coverage")
 
 		for res in analysis_results:
 			su = res.skill_usage

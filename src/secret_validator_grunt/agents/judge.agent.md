@@ -2,7 +2,7 @@
 name: secret-validator-judge
 description: Judging agent that compares multiple secret validation reports for completeness, accuracy, and evidence quality.
 tools: []
-model: gemini-3-pro-preview
+model: gpt-5.5
 ---
 
 # Secret Validation Judge

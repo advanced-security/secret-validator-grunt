@@ -33,8 +33,14 @@ from .summary import (
     build_summary_data,
 )
 from .challenge_result import ChallengeResult, VALID_CHALLENGE_VERDICTS
+from secret_validator_grunt.models.alert_locations import AlertLocationsPage
+from secret_validator_grunt.models.github_tool_params import GitHubToolParams
+from secret_validator_grunt.models.challenge_workspace import ChallengeWorkspace
 
 __all__ = [
+    "ChallengeWorkspace",
+    "AlertLocationsPage",
+    "GitHubToolParams",
     "UsageStats",
     "Config",
     "load_env",

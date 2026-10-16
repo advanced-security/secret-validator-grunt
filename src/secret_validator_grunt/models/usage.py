@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Any
 
 from pydantic import BaseModel, Field, ConfigDict
-from copilot.generated.session_events import QuotaSnapshot
 
 
 class UsageStats(BaseModel):
@@ -25,9 +25,12 @@ class UsageStats(BaseModel):
 	    default=None, description="Current tokens in session context")
 	token_limit: float | None = Field(default=None,
 	                                  description="Session token limit")
-	quota_snapshots_start: dict[str, QuotaSnapshot] | None = Field(
+	# Quota snapshot values are duck-typed (any object exposing
+	# ``used_requests``) because the Copilot SDK no longer exposes a
+	# public per-event quota snapshot type.
+	quota_snapshots_start: dict[str, Any] | None = Field(
 	    default=None, description="Initial quota snapshots")
-	quota_snapshots_end: dict[str, QuotaSnapshot] | None = Field(
+	quota_snapshots_end: dict[str, Any] | None = Field(
 	    default=None, description="Final quota snapshots")
 
 	@property
@@ -45,7 +48,9 @@ class UsageStats(BaseModel):
 			start = None
 			if self.quota_snapshots_start:
 				start = self.quota_snapshots_start.get(key)
-			delta = end.used_requests - (start.used_requests if start else 0)
+			end_used = getattr(end, "used_requests", 0) or 0
+			start_used = getattr(start, "used_requests", 0) or 0
+			delta = end_used - start_used
 			res[key] = delta
 		return res
 
@@ -60,9 +65,9 @@ class UsageStats(BaseModel):
 		self.cost += cost or 0
 		self.duration += duration or 0
 
-	def update_snapshot(
-	        self, *, current_tokens: float | None, token_limit: float | None,
-	        quota_snapshots: dict[str, QuotaSnapshot] | None) -> None:
+	def update_snapshot(self, *, current_tokens: float | None,
+	                    token_limit: float | None,
+	                    quota_snapshots: dict[str, Any] | None) -> None:
 		"""Update snapshot state and preserve first/last quota snapshots."""
 		if current_tokens is not None:
 			self.current_tokens = current_tokens

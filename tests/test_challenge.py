@@ -375,6 +375,40 @@ class TestChallengePromptLoading:
 		assert '"verdict"' in prompt
 
 
+@pytest.mark.parametrize(
+    "asset",
+    [
+        "agents/challenger.agent.md",
+        "prompts/challenge_task.md",
+        "skills/challenger/secret-verification-methodology/SKILL.md",
+    ],
+)
+def test_challenger_requires_supported_inference(asset: str) -> None:
+	"""Every core instruction checks inference, not just reproducibility."""
+	from secret_validator_grunt.utils.paths import resolve_asset_path
+
+	text = resolve_asset_path(asset).read_text()
+	assert "not re-adjudicate" not in text
+	assert "not verdict correctness" not in text
+	assert "scope" in text
+	assert "inference" in text
+	assert "material gap" in text
+	assert "INSUFFICIENT_EVIDENCE" in text
+	assert "REFUTED" in text
+
+
+def test_rotation_guidance_targets_alerted_value() -> None:
+	"""A working replacement must not refute a historical value's rejection."""
+	from secret_validator_grunt.utils.paths import resolve_asset_path
+
+	text = resolve_asset_path(
+	    "skills/challenger/rotation-and-revocation-analysis/SKILL.md"
+	).read_text()
+	assert "exact alerted value" in text
+	assert "does not prove provider-side revocation" in text
+	assert "report based conclusion on old version" not in text
+
+
 class TestChallengerSkills:
 	"""Tests for challenger skills."""
 
@@ -981,8 +1015,8 @@ class TestTUIRunDisplayStateChallenge:
 # =============================================================================
 
 
-class TestChallengerStreamLogPath:
-	"""Tests for challenger stream log being written to alert_dir."""
+class TestChallengerWorkspaceOutput:
+	"""Check output metadata supplied by the host, not the model."""
 
 	def test_run_challenges_accepts_alert_dir(self):
 		"""run_challenges signature accepts alert_dir parameter."""
@@ -1000,42 +1034,25 @@ class TestChallengerStreamLogPath:
 		sig = inspect.signature(run_single_challenge)
 		assert "alert_dir" in sig.parameters
 
-	def test_stream_log_path_uses_alert_dir(self, tmp_path):
-		"""When alert_dir is provided, stream_log_path targets alert_dir."""
-		from pathlib import Path
-		from secret_validator_grunt.models.run_params import RunParams
+	def test_model_cannot_supply_workspace(self) -> None:
+		"""Model output cannot override the host-created evidence path."""
+		from secret_validator_grunt.core.challenge import parse_challenge_result
 
-		alert_dir = tmp_path / "org" / "repo" / "alert-1"
-		alert_dir.mkdir(parents=True)
+		result = parse_challenge_result(
+		    '{"verdict":"CONFIRMED","workspace":"/invented/evidence"}')
+		assert result.workspace is None
 
-		rp = RunParams(org_repo="org/repo", alert_id="1")
-		org_repo_slug = rp.org_repo.replace("/", "_")
-		expected_name = f"challenge-0-{org_repo_slug}-{rp.alert_id}.stream.log"
-		expected_path = alert_dir / expected_name
+	def test_judge_receives_challenger_workspace(self) -> None:
+		"""A tool-enabled judge can locate the separately retained evidence."""
+		from secret_validator_grunt.core.judge import _format_challenge_annotation
 
-		# Verify the naming pattern
-		assert expected_path.name == "challenge-0-org_repo-1.stream.log"
-		assert expected_path.parent == alert_dir
-
-	def test_stream_log_path_per_index(self, tmp_path):
-		"""Each challenge index gets its own stream log file."""
-		from secret_validator_grunt.models.run_params import RunParams
-
-		alert_dir = tmp_path / "test"
-		alert_dir.mkdir()
-
-		rp = RunParams(org_repo="acme/app", alert_id="42")
-		org_repo_slug = rp.org_repo.replace("/", "_")
-
-		names = [
-		    f"challenge-{i}-{org_repo_slug}-{rp.alert_id}.stream.log"
-		    for i in range(3)
-		]
-		assert names == [
-		    "challenge-0-acme_app-42.stream.log",
-		    "challenge-1-acme_app-42.stream.log",
-		    "challenge-2-acme_app-42.stream.log",
-		]
+		result = AgentRunResult(
+		    run_id="0",
+		    challenge_result=ChallengeResult(
+		        verdict="CONFIRMED", workspace="/out/challenges/unique"),
+		)
+		annotation = _format_challenge_annotation(result)
+		assert "Challenger Workspace: /out/challenges/unique" in annotation
 
 
 class TestBuildChallengePromptSkillManifest:
@@ -1095,7 +1112,7 @@ class TestBuildChallengePromptSkillManifest:
 
 
 class TestChallengerEvidenceFocus:
-	"""Tests that challenger instructions focus on evidence integrity, not verdict re-adjudication."""
+	"""Check both evidence integrity and independent verdict judgment."""
 
 	def test_agent_step5_is_evidence_quality(self):
 		"""Step 5 in challenger agent focuses on evidence quality, not confidence scoring."""
@@ -1105,15 +1122,13 @@ class TestChallengerEvidenceFocus:
 		assert "Assess Evidence Quality" in content
 		assert "Assess Confidence" not in content
 
-	def test_agent_no_verdict_readjudication(self):
-		"""Challenger agent does not tell agent to re-adjudicate verdicts."""
+	def test_agent_challenges_verdict_inference(self) -> None:
+		"""Genuine evidence must also support the conclusion."""
 		from secret_validator_grunt.loaders.agents import load_agent
 		agent = load_agent("agents/challenger.agent.md")
 		content = agent.prompt
-		# Should NOT contain verdict-level criteria
-		assert "TRUE_POSITIVE requires at least one successful" not in content
-		# Should contain evidence-focused language
-		assert "verify the EVIDENCE" in content
+		assert "Challenge both evidence integrity and verdict correctness" in content
+		assert "Reproducibility alone is not sufficient" in content
 
 	def test_agent_refuted_is_evidence_based(self):
 		"""REFUTED verdict criteria is about fabricated/contradicted evidence."""
@@ -1133,9 +1148,10 @@ class TestChallengerEvidenceFocus:
 		# Should NOT contain verdict-level criteria
 		assert "TRUE_POSITIVE requires at least one successful" not in prompt
 
-	def test_prompt_evidence_integrity_language(self):
-		"""Challenge prompt uses evidence integrity language, not verdict critique."""
+	def test_prompt_evidence_and_inference_language(self) -> None:
+		"""The prompt must not prohibit independent verdict judgment."""
 		from secret_validator_grunt.loaders.prompts import load_prompt
 		prompt = load_prompt("challenge_task.md")
 		assert "evidence integrity" in prompt.lower()
-		assert "not to re-adjudicate the verdict" in prompt.lower()
+		assert "verdict correctness" in prompt
+		assert "not to re-adjudicate" not in prompt

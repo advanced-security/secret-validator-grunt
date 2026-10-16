@@ -8,6 +8,7 @@ to enable testing with mock implementations.
 from __future__ import annotations
 
 from typing import Protocol, Any
+from copilot.generated.rpc import SessionRpc
 
 
 class SessionProtocol(Protocol):
@@ -17,8 +18,13 @@ class SessionProtocol(Protocol):
 	Defines the expected methods for interacting with a Copilot session.
 	"""
 
-	async def send_and_wait(self, options: dict,
-	                        timeout: int | None = None) -> Any:
+	@property
+	def rpc(self) -> SessionRpc:
+		"""Expose the SDK session RPC surface."""
+		...
+
+	async def send_and_wait(self, prompt: str, *,
+	                        timeout: float = 60.0) -> Any:
 		"""Send a prompt and wait for response."""
 		...
 
@@ -26,16 +32,16 @@ class SessionProtocol(Protocol):
 		"""Abort the current session operation."""
 		...
 
-	async def destroy(self) -> Any:
-		"""Destroy the session and release resources."""
+	async def disconnect(self) -> Any:
+		"""Disconnect the session and release resources."""
 		...
 
 	def on(self, handler: Any) -> Any:
 		"""Register an event handler."""
 		...
 
-	async def get_messages(self) -> Any:
-		"""Get all messages from the session."""
+	async def get_events(self) -> Any:
+		"""Get all events from the session history."""
 		...
 
 
@@ -54,8 +60,8 @@ class CopilotClientProtocol(Protocol):
 		"""Stop the client connection."""
 		...
 
-	async def create_session(self, config: dict) -> SessionProtocol:
-		"""Create a new session with the given configuration."""
+	async def create_session(self, **config: Any) -> SessionProtocol:
+		"""Create a new session with the given keyword configuration."""
 		...
 
 

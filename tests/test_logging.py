@@ -3,14 +3,36 @@
 from __future__ import annotations
 
 import logging
+import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
+from io import StringIO
 
 import pytest
+from rich.console import Console
+from rich.logging import RichHandler
 
 from secret_validator_grunt.utils.logging import (
     sanitize_text,
     TokenSanitizingFilter,
     configure_logging,
 )
+
+
+@contextmanager
+def isolated_root_logger() -> Iterator[logging.Logger]:
+	"""Isolate logging setup and restore pytest's handlers afterward."""
+	root = logging.getLogger()
+	previous_level = root.level
+	previous_handlers, previous_filters = root.handlers, root.filters
+	root.handlers, root.filters = [], []
+	try:
+		yield root
+	finally:
+		for handler in root.handlers:
+			handler.close()
+		root.handlers, root.filters = previous_handlers, previous_filters
+		root.setLevel(previous_level)
 
 
 class TestSanitizeText:
@@ -163,3 +185,173 @@ class TestConfigureLoggingFilter:
 		count = sum(1 for f in root.filters
 		            if isinstance(f, TokenSanitizingFilter))
 		assert count == 1
+
+
+class TestConsoleLogging:
+	"""Logging shares the live console without changing message semantics."""
+
+	def test_uses_shared_console(self) -> None:
+		"""A supplied console receives the existing timestamped log format."""
+		output = StringIO()
+		console = Console(file=output, width=200)
+		with isolated_root_logger() as root:
+			configure_logging(console=console)
+			handler = root.handlers[0]
+			assert isinstance(handler, RichHandler)
+			assert handler.console is console
+			logging.getLogger("test.display").info("pre-clone completed")
+		assert "INFO test.display: pre-clone completed" in output.getvalue()
+
+	def test_sanitizes_child_logger_arguments(self) -> None:
+		"""Propagated records are sanitized at the Rich handler."""
+		output = StringIO()
+		url = "https://x-access-token:example-token@github.com/org/repo.git"
+		with isolated_root_logger():
+			configure_logging(console=Console(file=output, width=200))
+			logging.getLogger("test.display").warning("clone failed: %s", url)
+		assert "example-token" not in output.getvalue()
+		assert "x-access-token:***@github.com" in output.getvalue()
+		assert "WARNING test.display: clone failed:" in output.getvalue()
+
+	def test_default_logging_uses_stderr(
+	    self,
+	    monkeypatch: pytest.MonkeyPatch,
+	) -> None:
+		"""Callers without a console retain standard stderr logging."""
+		output = StringIO()
+		monkeypatch.setattr("sys.stderr", output)
+		with isolated_root_logger() as root:
+			configure_logging()
+			logging.getLogger("test.display").info("plain output")
+			assert root.handlers[0].stream is output
+		assert "INFO test.display: plain output" in output.getvalue()
+		assert "\x1b" not in output.getvalue()
+
+	def test_repeated_configuration_keeps_one_handler(self) -> None:
+		"""Repeated configuration does not duplicate console output."""
+		output = StringIO()
+		console = Console(file=output, width=200)
+		with isolated_root_logger() as root:
+			configure_logging(console=console)
+			configure_logging(console=console)
+			logging.getLogger("test.display").info("one message")
+			assert len(root.handlers) == 1
+		assert output.getvalue().count("one message") == 1
+
+	@pytest.mark.parametrize("fail", [False, True])
+	def test_cli_shares_console_and_cleans_up(
+	    self,
+	    monkeypatch: pytest.MonkeyPatch,
+	    fail: bool,
+	) -> None:
+		"""The real CLI shares one console and stops Live on either outcome."""
+		from secret_validator_grunt import main
+		from secret_validator_grunt.models.config import Config
+		from secret_validator_grunt.models.judge_result import JudgeResult
+		from secret_validator_grunt.models.run_outcome import RunOutcome
+		from secret_validator_grunt.models.run_params import RunParams
+		from secret_validator_grunt.models.run_result import AgentRunResult
+		from secret_validator_grunt.ui.streaming import ProgressCallback
+
+		output = StringIO()
+		console = Console(file=output, width=200)
+		monkeypatch.setattr(main, "Console", lambda: console)
+		monkeypatch.setattr(main, "load_env", lambda: None)
+		monkeypatch.setattr(main, "Config",
+		                    lambda: Config(_env_file=None, ANALYSIS_COUNT=1))
+
+		async def fake_run_all(
+		    config: Config,
+		    run_params: RunParams,
+		    progress_cb: ProgressCallback | None = None,
+		) -> RunOutcome:
+			assert console._live_stack
+			handler = logging.getLogger().handlers[0]
+			assert isinstance(handler, RichHandler)
+			assert handler.console is console
+			logging.getLogger("test.display").info("synthetic runner")
+			assert progress_cb is not None
+			progress_cb("0", "analysis_started")
+			if fail:
+				raise RuntimeError("synthetic failure")
+			progress_cb("0", "analysis_completed")
+			return RunOutcome(
+			    analysis_results=[AgentRunResult(run_id="0", progress_log=[])],
+			    judge_result=JudgeResult(winner_index=0, scores=[]),
+			)
+
+		monkeypatch.setattr(main, "run_all", fake_run_all)
+		with isolated_root_logger():
+			if fail:
+				with pytest.raises(RuntimeError, match="synthetic failure"):
+					main.run_impl("example/repo", "2")
+			else:
+				main.run_impl("example/repo", "2")
+				assert output.getvalue().count("Winner Report") == 1
+		assert output.getvalue().count("synthetic runner") == 1
+		assert not console._live_stack
+
+	@pytest.mark.parametrize("width,height", [(80, 24), (120, 40), (200, 50)])
+	def test_log_clears_and_redraws_live_panels(
+	    self,
+	    monkeypatch: pytest.MonkeyPatch,
+	    width: int,
+	    height: int,
+	) -> None:
+		"""A log clears every visible panel line before redrawing progress."""
+		from functools import partial
+		from rich.live import Live
+		from secret_validator_grunt.ui.tui import TUI
+
+		# Refresh explicitly so background ticks cannot race the assertions.
+		monkeypatch.setattr("secret_validator_grunt.ui.tui.Live",
+		                    partial(Live, auto_refresh=False))
+		output = StringIO()
+		console = Console(file=output, force_terminal=True, color_system=None,
+		                  width=width, height=height)
+		stdout, stderr = sys.stdout, sys.stderr
+		with isolated_root_logger():
+			configure_logging(console=console)
+			with TUI(3, org_repo="example/repo", alert_id="2",
+			         console=console) as ui:
+				ui.update("0", "analysis_started")
+				for index in range(8):
+					ui.update("0", f"assistant: inspecting repository {index}")
+				assert ui.live is not None
+				ui.live.refresh()
+				frame_height = min(
+				    height,
+				    len(
+				        console.render_lines(ui._build_table(),
+				                             console.options, pad=False)),
+				)
+				start = output.tell()
+				logging.getLogger("test.display").info("redraw-check")
+				written = output.getvalue()[start:]
+				before, marker, after = written.partition("redraw-check")
+				assert marker
+				assert before.count("\x1b[2K") == frame_height
+				assert "Analysis 0" in after
+				assert "status: running" in after
+		assert sys.stdout is stdout
+		assert sys.stderr is stderr
+
+	def test_redirected_output_has_one_final_panel_snapshot(self) -> None:
+		"""Piped output includes logs and final panels without cursor codes."""
+		from secret_validator_grunt.ui.tui import TUI
+
+		output = StringIO()
+		console = Console(file=output, force_terminal=False, width=120)
+		with isolated_root_logger():
+			configure_logging(console=console)
+			with TUI(2, console=console) as ui:
+				ui.update("0", "analysis_started")
+				logging.getLogger("test.display").info("redirected-check")
+				ui.update("0", "analysis_completed")
+		text = output.getvalue()
+		assert "\x1b" not in text
+		assert text.count("redirected-check") == 1
+		assert text.count("Analysis 0") == 1
+		assert text.count("Challenger 0") == 1
+		assert text.count("Judge") == 1
+		assert "status: completed" in text

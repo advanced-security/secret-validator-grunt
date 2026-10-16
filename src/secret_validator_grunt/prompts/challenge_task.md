@@ -23,7 +23,31 @@ You MUST inspect the workspace to verify the report's claims:
 Start by listing the workspace contents, then read relevant files to
 cross-check the report's claims.
 
+## Challenger Working Copy
+
+Your working directory is `{{challenge_workspace_path}}`. It contains
+independent copies of the analyst's scripts, logs, artifacts, report, and
+repository. Copied files are inputs, not evidence that you performed a rerun.
+
+- Original scripts, logs, artifacts, and report are read-only. Do not edit,
+  rename, delete, unlock, or run scripts from the original workspace.
+- Run scripts only from the working copy. Save stdout/stderr in its `logs/`
+  using a distinct filename per attempt. Generated artifacts must stay in
+  its `artifacts/`. Clearly label original evidence versus your rerun evidence.
+- Inspect absolute paths before execution. If a script writes to the original
+  workspace, adapt only the copied script and explain the change. If it cannot
+  safely be redirected, do not run it; record the limitation.
+- Virtual environments are not copied. An existing analyst interpreter can be
+  used read-only; any new environment or dependencies belong in your copy.
+- Never change original permissions to make a rerun work. The application
+  checks original content and permissions after your session.
+
 ## Challenge Protocol
+
+Apply the required challenger guidance supplied below. Optional guides remain
+listed by name and description; load them with `skill(...)` when the evidence
+or verification approach calls for them. Guidance being supplied or loaded
+does not prove the analyst followed it: verify execution from the workspace.
 
 1. **Inspect the workspace** — List the workspace directory. Read the
    scripts the analysis agent wrote. Read any test output logs. Verify
@@ -33,9 +57,13 @@ cross-check the report's claims.
    report against the workspace contents. Did the agent actually run
    the tests it describes? Do the logs match the reported results?
 
-3. **Re-run verification if possible** — If verification scripts exist
-   in `scripts/`, re-execute them and compare results against the
-   report's claims.
+3. **Challenge the method and inference** — Check the exact alerted value,
+   companion credentials, endpoint, scope, and region. Distinguish provider
+   authentication errors from permission restrictions and transport failures.
+   Consider alternative explanations before accepting the conclusion.
+
+   Re-run safe checks when they resolve a concrete question. Matching output
+   establishes reproducibility, not correctness of the method or inference.
 
 4. **Independent cross-checks** — Use the available tools:
    - `gh_secret_scanning_alert` to verify alert state
@@ -54,10 +82,12 @@ cross-check the report's claims.
    - Were scripts actually executed, or were results files written by hand?
    - Do log files contain real stdout/stderr from script execution?
    - Is the confidence score proportionate to the evidence strength?
-   - **Focus on evidence integrity, not verdict correctness.** A valid
-     TRUE_POSITIVE for a demo secret is still correct — your job is to
-     verify whether the evidence genuinely supports the stated verdict,
-     not to re-adjudicate the verdict itself.
+   - Challenge both evidence integrity and verdict correctness. Demo/example
+     context alone cannot override a demonstrated authentication result.
+   - CONFIRMED requires genuine evidence, an appropriate method, and a
+     supported conclusion. REFUTED requires a demonstrated contradiction.
+     An unresolved material gap is INSUFFICIENT_EVIDENCE, even if the script
+     reproduces.
 
 ## Output Format
 
@@ -76,3 +106,7 @@ Respond ONLY with JSON in a fenced ```json``` block:
 
 Be thorough but concise. If you cannot access the necessary data,
 verdict is INSUFFICIENT_EVIDENCE with clear reasoning.
+Use `verification_reproduced` only for whether a rerun matched the original
+result (null if not attempted), not whether the report's conclusion is correct.
+Explain the method and inference assessment in `reasoning`, and record
+unresolved limitations in `evidence_gaps`.

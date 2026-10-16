@@ -12,7 +12,8 @@ from typing import Any
 import yaml
 
 
-def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
+def split_frontmatter(text: str, *,
+                      strict: bool = False) -> tuple[dict[str, Any], str]:
 	"""
 	Split YAML frontmatter from markdown body.
 
@@ -21,6 +22,7 @@ def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
 
 	Parameters:
 		text: The full markdown file content.
+		strict: Raise for missing or invalid metadata instead of falling back.
 
 	Returns:
 		Tuple of (frontmatter dict, body text). Returns empty dict
@@ -30,6 +32,8 @@ def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
 
 	# Need at least 3 lines: ---, content, ---
 	if len(lines) < 3 or lines[0].strip() != "---":
+		if strict:
+			raise ValueError("Missing YAML frontmatter")
 		return {}, text
 
 	# Find closing delimiter
@@ -40,6 +44,8 @@ def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
 			break
 
 	if end_idx < 0:
+		if strict:
+			raise ValueError("Unterminated YAML frontmatter")
 		return {}, text
 
 	fm_text = "\n".join(lines[1:end_idx])
@@ -47,9 +53,15 @@ def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
 
 	try:
 		meta = yaml.safe_load(fm_text) or {}
-	except yaml.YAMLError:
+	except yaml.YAMLError as exc:
+		if strict:
+			raise ValueError("Invalid YAML frontmatter") from exc
 		meta = {}
 
+	if not isinstance(meta, dict):
+		if strict:
+			raise ValueError("YAML frontmatter must be a mapping")
+		meta = {}
 	return meta, body.lstrip("\n")
 
 

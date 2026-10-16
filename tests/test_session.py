@@ -4,13 +4,93 @@ import pytest
 import asyncio
 
 from secret_validator_grunt.models.config import Config
+from secret_validator_grunt.models.agent_config import AgentConfig
 from secret_validator_grunt.core.session import (
+    build_session_config,
     load_and_validate_template,
     discover_all_disabled_skills,
     send_and_collect,
     destroy_session_safe,
     is_response_empty,
+    verify_runtime_skills,
 )
+
+# ── build_session_config ───────────────────────────────────────────────
+
+
+def test_build_session_config_preselects_agent():
+	"""Agent is pre-selected and permissions are auto-approved."""
+	agent = AgentConfig(name="validator", prompt="p", tools=["bash"])
+	cfg = build_session_config(
+	    model="m",
+	    streaming=True,
+	    agent=agent,
+	    tools=[],
+	    skill_directories=["/skills"],
+	    system_message="extra",
+	    session_id="sid",
+	    working_directory="/work",
+	)
+	assert cfg["agent"] == "validator"
+	assert cfg["custom_agents"][0]["name"] == "validator"
+	assert cfg["available_tools"] == ["bash"]
+	assert cfg["skill_directories"] == ["/skills"]
+	assert cfg["system_message"] == {"mode": "append", "content": "extra"}
+	assert cfg["session_id"] == "sid"
+	assert cfg["working_directory"] == "/work"
+	assert callable(cfg["on_permission_request"])
+	# Host repo instructions (AGENTS.md, .github/instructions) are not
+	# rendered into stage agents' context
+	assert cfg["skip_custom_instructions"] is True
+
+
+def test_build_session_config_omits_optional_keys():
+	"""Optional keys are omitted so SDK defaults apply."""
+	agent = AgentConfig(name="a", prompt="p")
+	cfg = build_session_config(
+	    model="m",
+	    streaming=False,
+	    agent=agent,
+	    tools=[],
+	    skill_directories=[],
+	)
+	for key in ("system_message", "session_id", "working_directory"):
+		assert key not in cfg
+	assert cfg["disabled_skills"] is None
+	# Agent without a tools list leaves the session unrestricted
+	assert cfg["available_tools"] is None
+
+
+def test_build_session_config_preserves_empty_tools():
+	"""An explicit empty tool list yields a tool-free session."""
+	agent = AgentConfig(name="j", prompt="p", tools=[])
+	cfg = build_session_config(
+	    model="m",
+	    streaming=False,
+	    agent=agent,
+	    tools=[],
+	    skill_directories=[],
+	)
+	assert cfg["available_tools"] == []
+	assert cfg["custom_agents"][0]["tools"] == []
+
+
+def test_session_config_accepts_creation_time_handler() -> None:
+	"""The current SDK accepts the supplied collector callback directly."""
+	import inspect
+	from copilot import CopilotClient
+	from copilot.generated.session_events import SessionEvent
+
+	def collect(event: SessionEvent) -> None:
+		"""Stand in for a stream collector."""
+
+	config = build_session_config(model="test", streaming=True,
+	                              agent=AgentConfig(name="a",
+	                                                prompt="p"), tools=[],
+	                              skill_directories=[], on_event=collect)
+	inspect.signature(CopilotClient.create_session).bind(None, **config)
+	assert config["on_event"] is collect
+
 
 # ── load_and_validate_template ─────────────────────────────────────────
 
@@ -76,7 +156,7 @@ class _FakeSession:
 		self.aborted = False
 		self.destroyed = False
 
-	async def send_and_wait(self, prompt_dict, timeout=None):
+	async def send_and_wait(self, prompt, *, timeout=60.0):
 		if self._error:
 			raise self._error
 		return self._response
@@ -84,7 +164,7 @@ class _FakeSession:
 	async def abort(self):
 		self.aborted = True
 
-	async def destroy(self):
+	async def disconnect(self):
 		self.destroyed = True
 
 
@@ -146,12 +226,12 @@ async def test_destroy_session_safe_success():
 
 @pytest.mark.asyncio
 async def test_destroy_session_safe_error():
-	"""Logs but does not raise on destroy error."""
+	"""Logs but does not raise on disconnect error."""
 
 	class _FailSession:
 
-		async def destroy(self):
-			raise RuntimeError("destroy failed")
+		async def disconnect(self):
+			raise RuntimeError("disconnect failed")
 
 	await destroy_session_safe(_FailSession(), "test")  # should not raise
 
@@ -212,8 +292,8 @@ class _ContinuationSession:
 		self.prompts_received: list[str] = []
 		self.aborted = False
 
-	async def send_and_wait(self, prompt_dict, timeout=None):
-		self.prompts_received.append(prompt_dict.get("prompt", ""))
+	async def send_and_wait(self, prompt, *, timeout=60.0):
+		self.prompts_received.append(prompt)
 		idx = self._call_count
 		self._call_count += 1
 		if idx < len(self._responses):
@@ -226,7 +306,7 @@ class _ContinuationSession:
 	async def abort(self):
 		self.aborted = True
 
-	async def destroy(self):
+	async def disconnect(self):
 		pass
 
 
@@ -425,3 +505,120 @@ async def test_continuation_prompt_file_exists():
 	content = load_prompt("continuation_task.md")
 	assert len(content) > 50
 	assert "continue" in content.lower()
+
+
+# ── verify_runtime_skills ──────────────────────────────────────────────
+
+
+def _runtime_manifest():
+	from secret_validator_grunt.models.skill import SkillInfo, SkillManifest
+
+	return SkillManifest(skills=[
+	    SkillInfo(name="req", description="r", path="/r", required=True),
+	    SkillInfo(name="opt", description="o", path="/o"),
+	    SkillInfo(name="hidden", description="h", path="/h"),
+	])
+
+
+class _CatalogSession:
+	"""Fake session exposing ``rpc.skills.list()``."""
+
+	def __init__(self, entries=None, error=None):
+		from types import SimpleNamespace
+		from copilot.generated.rpc import SkillList
+
+		async def _list():
+			if error:
+				raise error
+			return SkillList.from_dict({
+			    "skills": [{
+			        "name": n,
+			        "description": n,
+			        "enabled": e,
+			        "source": "builtin",
+			        "userInvocable": True
+			    } for n, e in entries]
+			})
+
+		self.rpc = SimpleNamespace(skills=SimpleNamespace(list=_list))
+
+
+def _collector(tmp_path):
+	from secret_validator_grunt.ui.streaming import StreamCollector
+
+	return StreamCollector(run_id="0", stream_log_path=tmp_path / "s.log")
+
+
+@pytest.mark.asyncio
+async def test_verify_runtime_skills_all_present(tmp_path):
+	"""No warning when every enabled manifest skill is in the catalog."""
+	collector = _collector(tmp_path)
+	progress = []
+	session = _CatalogSession([("req", True), ("opt", True),
+	                           ("hidden", False)])
+	missing = await verify_runtime_skills(
+	    session, _runtime_manifest(), ["hidden"], collector, "0",
+	    lambda rid, msg: progress.append(msg))
+	assert missing == []
+	assert collector.skill_usage.unavailable_skills == []
+	assert progress == []
+
+
+@pytest.mark.asyncio
+async def test_verify_runtime_skills_reports_missing(tmp_path, caplog):
+	"""Missing or disabled-at-runtime skills are reported, not raised."""
+	collector = _collector(tmp_path)
+	progress = []
+	session = _CatalogSession([("opt", False)])
+	with caplog.at_level("WARNING"):
+		missing = await verify_runtime_skills(
+		    session, _runtime_manifest(), ["hidden"], collector, "0",
+		    lambda rid, msg: progress.append(msg))
+	assert missing == ["opt"]
+	assert collector.skill_usage.unavailable_skills == ["opt"]
+	assert progress == ["skills_unavailable: opt"]
+	assert "optional skill(s)" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_verify_runtime_skills_without_rpc(tmp_path):
+	"""Sessions without a skills RPC are skipped."""
+	collector = _collector(tmp_path)
+	missing = await verify_runtime_skills(_FakeSession(), _runtime_manifest(),
+	                                      [], collector, "0")
+	assert missing is None
+	assert collector.skill_usage.unavailable_skills is None
+
+
+@pytest.mark.asyncio
+async def test_verify_runtime_skills_rpc_error(tmp_path):
+	"""Catalog errors never fail the run."""
+	collector = _collector(tmp_path)
+	session = _CatalogSession(error=RuntimeError("boom"))
+	missing = await verify_runtime_skills(session, _runtime_manifest(), [],
+	                                      collector, "0")
+	assert missing is None
+
+
+@pytest.mark.asyncio
+async def test_verify_runtime_skills_has_a_deadline(tmp_path, monkeypatch,
+                                                    caplog) -> None:
+	"""A stalled catalog must not block the analysis indefinitely."""
+	from types import SimpleNamespace
+
+	async def stalled() -> None:
+		"""Simulate an RPC that never answers."""
+		await asyncio.Event().wait()
+
+	monkeypatch.setattr(
+	    "secret_validator_grunt.core.session.SKILL_CATALOG_TIMEOUT_SECONDS",
+	    0.01)
+	session = SimpleNamespace(rpc=SimpleNamespace(skills=SimpleNamespace(
+	    list=stalled)))
+	collector = _collector(tmp_path)
+	missing = await asyncio.wait_for(
+	    verify_runtime_skills(session, _runtime_manifest(), [], collector,
+	                          "0"), timeout=1)
+	assert missing is None
+	assert collector.skill_usage.unavailable_skills is None
+	assert "could not list optional runtime skills" in caplog.text
